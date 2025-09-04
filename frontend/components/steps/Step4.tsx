@@ -1,0 +1,366 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '../ui/Button';
+import { Select, Textarea } from '../ui/FormElements';
+import { conditionsApi, userApi, aiApi, handleApiError } from '../../lib/api';
+import { formStorage, format, error as errorUtils } from '../../lib/utils';
+import { DEFAULT_CONDITION_GOALS } from '../../lib/constants';
+import { Step4FormData, UserSession } from '../../types';
+
+export const Step4Component: React.FC = () => {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [loadingGoals, setLoadingGoals] = useState(false);
+  const [generatingDashboard, setGeneratingDashboard] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<keyof Step4FormData, string>>>({});
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
+  const [availableGoals, setAvailableGoals] = useState<string[]>([]);
+  const [userId, setUserId] = useState<number | null>(null);
+  const [showCustomGoal, setShowCustomGoal] = useState(false);
+  const [customGoal, setCustomGoal] = useState('');
+  const [formData, setFormData] = useState<Step4FormData>({
+    main_goal: '',
+    main_question: ''
+  });
+
+  // Check if user has completed previous steps
+  useEffect(() => {
+    const storedUserId = formStorage.getUserId();
+    if (!storedUserId) {
+      router.push('/step-1');
+      return;
+    }
+    setUserId(storedUserId);
+
+    // Load user session
+    const loadSession = async () => {
+      try {
+        const session = await userApi.getSession(storedUserId);
+        setUserSession(session);
+        
+        // Load saved form data
+        const savedData = formStorage.getFormData<Partial<Step4FormData>>();
+        if (savedData) {
+          setFormData(prev => ({ ...prev, ...savedData }));
+          if (savedData.main_goal && !DEFAULT_CONDITION_GOALS[session.condition_selected.toLowerCase()]?.includes(savedData.main_goal)) {
+            setShowCustomGoal(true);
+            setCustomGoal(savedData.main_goal);
+          }
+        }
+      } catch (err) {
+        errorUtils.log('Step4Component loadSession', err);
+        router.push('/step-2');
+      } finally {
+        setLoadingSession(false);
+      }
+    };
+
+    loadSession();
+  }, [router]);
+
+  // Load condition-specific goals
+  useEffect(() => {
+    if (!userSession?.condition_selected) return;
+
+    const loadGoals = async () => {
+      setLoadingGoals(true);
+      try {
+        const goalsData = await conditionsApi.getGoals(userSession.condition_selected);
+        setAvailableGoals(goalsData.goals);
+      } catch (err) {
+        errorUtils.log('Step4Component loadGoals', err);
+        // Fallback to default goals
+        const conditionKey = userSession.condition_selected.toLowerCase();
+        const defaultGoals = DEFAULT_CONDITION_GOALS[conditionKey] || DEFAULT_CONDITION_GOALS['diabetes'];
+        setAvailableGoals(defaultGoals);
+      } finally {
+        setLoadingGoals(false);
+      }
+    };
+
+    loadGoals();
+  }, [userSession]);
+
+  // Save form data whenever it changes
+  useEffect(() => {
+    formStorage.saveFormData(formData);
+  }, [formData]);
+
+  const updateFormData = (field: keyof Step4FormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when user updates field
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleGoalChange = (selectedGoal: string) => {
+    if (selectedGoal === 'Other...') {
+      setShowCustomGoal(true);
+      updateFormData('main_goal', customGoal);
+    } else {
+      setShowCustomGoal(false);
+      setCustomGoal('');
+      updateFormData('main_goal', selectedGoal);
+    }
+  };
+
+  const handleCustomGoalChange = (value: string) => {
+    setCustomGoal(value);
+    if (showCustomGoal) {
+      updateFormData('main_goal', value);
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Partial<Record<keyof Step4FormData, string>> = {};
+
+    // Validate main goal
+    if (!formData.main_goal || formData.main_goal.trim().length === 0) {
+      newErrors.main_goal = 'Please select or enter your main goal';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm() || !userId || !userSession) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Update user session with goals and questions
+      await userApi.createSession(userId, {
+        condition_selected: userSession.condition_selected,
+        diagnosis_year: userSession.diagnosis_year,
+        takes_medication: userSession.takes_medication,
+        medications: userSession.medications,
+        checks_vitals: userSession.checks_vitals,
+        ...formData
+      });
+
+      // Mark step as complete
+      formStorage.saveCurrentStep(5);
+      
+      // Start dashboard generation with overlay
+      setLoading(false);
+      setGeneratingDashboard(true);
+      
+      // Generate AI dashboard content
+      await aiApi.generateDashboard(userId);
+      
+      // Content is ready, navigate to dashboard
+      setGeneratingDashboard(false);
+      router.push('/dashboard');
+      
+    } catch (err) {
+      const errorMessage = handleApiError(err);
+      errorUtils.log('Step4Component handleSubmit', err);
+      setErrors({ main_goal: errorMessage });
+      setLoading(false);
+      setGeneratingDashboard(false);
+    }
+  };
+
+  const handleBack = () => {
+    router.push('/step-3');
+  };
+
+  if (loadingSession) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="flex items-center justify-center min-h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!userSession) {
+    return null;
+  }
+
+  const firstName = format.getFirstName(userSession.full_name || 'there');
+  const condition = userSession.condition_selected;
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      {/* Dashboard Generation Overlay */}
+      {generatingDashboard && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-8 py-6 shadow-xl pointer-events-auto">
+            <div className="flex items-center space-x-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="text-blue-700 text-lg font-medium">
+                Generating your personalized dashboard content...
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          AI-Based Patient Education
+        </h1>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h2 className="text-xl font-semibold text-blue-900 mb-2">
+            Step 4: Goals & Questions
+          </h2>
+          <p className="text-blue-700">
+            Tell us about your goals and any specific questions you have about {condition}.
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Main Goal Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            What is your main goal right now?
+            <span className="text-red-500 ml-1">*</span>
+          </label>
+          
+          {loadingGoals ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {availableGoals.map((goal) => (
+                <label key={goal} className="flex items-start space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="main_goal"
+                    value={goal}
+                    checked={!showCustomGoal && formData.main_goal === goal}
+                    onChange={() => handleGoalChange(goal)}
+                    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700 leading-5">{goal}</span>
+                </label>
+              ))}
+              
+              {/* Custom goal input */}
+              {showCustomGoal && (
+                <div className="ml-7 mt-3">
+                  <input
+                    type="text"
+                    placeholder="Enter your custom goal..."
+                    value={customGoal}
+                    onChange={(e) => handleCustomGoalChange(e.target.value)}
+                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                    autoFocus
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          
+          {errors.main_goal && (
+            <p className="mt-2 text-sm text-red-600">{errors.main_goal}</p>
+          )}
+        </div>
+
+        {/* Main Question */}
+        <div>
+          <Textarea
+            label={`What is your biggest question about ${condition}?`}
+            placeholder={`e.g., "What can I eat for breakfast that won't spike my blood sugar?" or "How often should I exercise?"`}
+            value={formData.main_question || ''}
+            onChange={(e) => updateFormData('main_question', e.target.value)}
+            rows={4}
+            hint="Optional - This helps us provide more personalized information"
+          />
+        </div>
+
+        {/* Example Questions */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">
+            Common questions about {condition}:
+          </h3>
+          <ul className="text-sm text-gray-600 space-y-1">
+            {condition === 'Diabetes' && (
+              <>
+                <li>• "What foods should I avoid?"</li>
+                <li>• "How do I count carbohydrates?"</li>
+                <li>• "What should my blood sugar levels be?"</li>
+                <li>• "How often should I check my glucose?"</li>
+              </>
+            )}
+            {condition === 'Heart Health' && (
+              <>
+                <li>• "What exercises are safe for my heart?"</li>
+                <li>• "How can I lower my cholesterol naturally?"</li>
+                <li>• "What foods are heart-healthy?"</li>
+                <li>• "How do I manage stress for better heart health?"</li>
+              </>
+            )}
+            {condition === 'Pre-Procedure Prep' && (
+              <>
+                <li>• "How should I prepare for my procedure?"</li>
+                <li>• "What should I expect during recovery?"</li>
+                <li>• "What medications should I stop before the procedure?"</li>
+                <li>• "How can I manage pre-procedure anxiety?"</li>
+              </>
+            )}
+            {condition === 'Mental Wellness' && (
+              <>
+                <li>• "How can I manage my anxiety daily?"</li>
+                <li>• "What are healthy coping strategies?"</li>
+                <li>• "How important is sleep for mental health?"</li>
+                <li>• "When should I seek additional help?"</li>
+              </>
+            )}
+          </ul>
+        </div>
+
+        {/* Navigation Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleBack}
+            disabled={loading || generatingDashboard}
+            className="order-2 sm:order-1"
+          >
+            Back
+          </Button>
+          
+          <Button
+            type="submit"
+            loading={loading}
+            disabled={loading || generatingDashboard}
+            className="order-1 sm:order-2"
+            size="lg"
+          >
+            {loading ? 'Creating Dashboard...' : 'Create My Dashboard'}
+          </Button>
+        </div>
+      </form>
+
+      {/* Progress Indicator */}
+      <div className="mt-8 text-center">
+        <div className="flex justify-center space-x-2 mb-2">
+          {[1, 2, 3, 4, 5].map((step) => (
+            <div
+              key={step}
+              className={`w-3 h-3 rounded-full ${
+                step <= 4 ? 'bg-blue-600' : 'bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+        <p className="text-sm text-gray-500">Step 4 of 5</p>
+      </div>
+    </div>
+  );
+};

@@ -91,7 +91,43 @@ const ContentModal: React.FC<ContentModalProps> = ({
             {content.split('\n').map((paragraph, index) => {
               if (paragraph.trim() === '') return null;
               
-              // Check if paragraph contains **text** pattern for bold
+              // Check if this is the References section
+              if (paragraph.trim().toLowerCase().startsWith('references:')) {
+                return (
+                  <div key={index} className="mt-8 pt-6 border-t border-gray-200">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">{paragraph.trim()}</h4>
+                  </div>
+                );
+              }
+              
+              // Check if this is a reference line [1] ...
+              const referenceMatch = paragraph.match(/^\[(\d+)\]\s*(.+)$/);
+              if (referenceMatch) {
+                const [, refNumber, refText] = referenceMatch;
+                // Extract URL if present
+                const urlMatch = refText.match(/(https?:\/\/[^\s]+)/);
+                const textBeforeUrl = urlMatch ? refText.substring(0, refText.indexOf(urlMatch[0])).trim() : refText;
+                const url = urlMatch ? urlMatch[0] : null;
+                
+                return (
+                  <div key={index} className="mb-3 text-sm text-gray-600 leading-relaxed">
+                    <span className="font-medium text-blue-600">[{refNumber}]</span>
+                    <span className="ml-2">{textBeforeUrl}</span>
+                    {url && (
+                      <a 
+                        href={url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="ml-2 text-blue-600 hover:text-blue-800 underline break-all"
+                      >
+                        {url}
+                      </a>
+                    )}
+                  </div>
+                );
+              }
+              
+              // Regular paragraph processing
               const parts = paragraph.split(/\*\*(.*?)\*\*/g);
               
               return (
@@ -101,25 +137,38 @@ const ContentModal: React.FC<ContentModalProps> = ({
                       return <strong key={partIndex} className="font-bold text-gray-900">{part}</strong>;
                     }
                     
-                    // Check for URLs in the text and make them clickable
-                    const urlRegex = /(https?:\/\/[^\s]+)/g;
-                    const textParts = part.split(urlRegex);
+                    // Check for reference numbers [1], [2], etc. and make them stand out
+                    const textWithRefs = part.split(/(\[\d+\])/);
                     
-                    return textParts.map((textPart, textIndex) => {
-                      if (urlRegex.test(textPart)) {
+                    return textWithRefs.map((textPart, textIndex) => {
+                      if (/\[\d+\]/.test(textPart)) {
                         return (
-                          <a 
-                            key={textIndex} 
-                            href={textPart} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 underline break-all"
-                          >
+                          <span key={textIndex} className="text-blue-600 font-medium">
                             {textPart}
-                          </a>
+                          </span>
                         );
                       }
-                      return textPart;
+                      
+                      // Check for URLs in the text and make them clickable
+                      const urlRegex = /(https?:\/\/[^\s]+)/g;
+                      const urlParts = textPart.split(urlRegex);
+                      
+                      return urlParts.map((urlPart, urlIndex) => {
+                        if (urlRegex.test(urlPart)) {
+                          return (
+                            <a 
+                              key={urlIndex} 
+                              href={urlPart} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 underline break-all"
+                            >
+                              {urlPart}
+                            </a>
+                          );
+                        }
+                        return urlPart;
+                      });
                     });
                   })}
                 </p>

@@ -91,7 +91,22 @@ router.post('/generate-dashboard', async (req, res) => {
         - Key symptoms to monitor
         - How it affects the body
         - General management principles
-        Keep it under 300 words and beginner-friendly.`;
+        
+        IMPORTANT REQUIREMENTS:
+        - Include 3-4 real, credible references from reputable medical sources
+        - Use numbered references [1], [2], etc. within the text where appropriate
+        - At the end, include a "References:" section with full citations
+        - Sources should be from: Mayo Clinic, American Diabetes Association, WebMD, Healthline, PubMed, CDC, or similar reputable medical sources
+        - Ensure all referenced URLs are real and working
+        
+        Format example:
+        "Diabetes is a chronic condition that affects blood sugar levels [1]. Regular monitoring is essential [2].
+        
+        References:
+        [1] Mayo Clinic. Diabetes Overview. https://www.mayoclinic.org/diseases-conditions/diabetes/symptoms-causes/syc-20371444
+        [2] American Diabetes Association. Blood Glucose Monitoring. https://diabetes.org/healthy-living/medication-treatments/blood-glucose-testing"
+        
+        Keep it under 350 words including references and be beginner-friendly.`;
 
         // Card 2: Nutrition and Carbs
         const nutritionPrompt = `Provide nutrition guidance for ${userData.condition_selected}. Include:
@@ -99,7 +114,15 @@ router.post('/generate-dashboard', async (req, res) => {
         - Foods to limit or avoid
         - Meal planning tips
         - ${userData.condition_selected === 'Diabetes' ? 'Carbohydrate counting basics' : 'Dietary considerations'}
-        Keep it under 300 words and practical.`;
+        
+        IMPORTANT REQUIREMENTS:
+        - Include 3-4 real, credible references from reputable medical/nutrition sources
+        - Use numbered references [1], [2], etc. within the text where appropriate
+        - At the end, include a "References:" section with full citations
+        - Sources should be from: Mayo Clinic, American Heart Association, Academy of Nutrition and Dietetics, Harvard Health, Cleveland Clinic, or similar reputable sources
+        - Ensure all referenced URLs are real and working
+        
+        Keep it under 350 words including references and practical.`;
 
         // Card 3: Workout
         const workoutPrompt = `Suggest safe exercise recommendations for someone with ${userData.condition_selected}. Include:
@@ -114,7 +137,15 @@ router.post('/generate-dashboard', async (req, res) => {
         - Format video links as: https://www.youtube.com/watch?v=VIDEO_ID
         - Provide both beginner and intermediate level recommendations
         - Avoid recommending videos from small or inactive channels
-        Keep it under 500 words and actionable. MUST include actual working YouTube links from established channels.`;
+        
+        IMPORTANT REQUIREMENTS:
+        - Include 2-3 real, credible references from reputable medical/fitness sources
+        - Use numbered references [1], [2], etc. within the text where appropriate
+        - At the end, include a "References:" section with full citations
+        - Sources should be from: Mayo Clinic, American Heart Association, CDC Physical Activity Guidelines, ACSM, or similar reputable sources
+        - Ensure all referenced URLs are real and working
+        
+        Keep it under 450 words including references and actionable.`;
 
         // Card 4: Plan Your Day
         const dailyPlanPrompt = `Create a daily management checklist for ${userData.condition_selected}. Include:
@@ -122,7 +153,15 @@ router.post('/generate-dashboard', async (req, res) => {
         - Throughout the day reminders
         - Evening tasks
         - Self-monitoring tips
-        Format as a practical checklist under 300 words.`;
+        
+        IMPORTANT REQUIREMENTS:
+        - Include 2-3 real, credible references from reputable medical sources
+        - Use numbered references [1], [2], etc. within the text where appropriate
+        - At the end, include a "References:" section with full citations
+        - Sources should be from: Mayo Clinic, CDC, American Medical Association, or similar reputable medical sources
+        - Ensure all referenced URLs are real and working
+        
+        Format as a practical checklist under 350 words including references.`;
 
         const prompts = [
           { type: 'diagnosis', prompt: diagnosisPrompt },
@@ -133,7 +172,20 @@ router.post('/generate-dashboard', async (req, res) => {
 
         const responses = await Promise.all(
           prompts.map(async ({ type, prompt }) => {
-            const maxTokens = type === 'workout' ? 600 : 400; // More tokens for workout content with video links
+            let maxTokens;
+            switch (type) {
+              case 'workout':
+                maxTokens = 700; // More tokens for workout content with video links and references
+                break;
+              case 'diagnosis':
+              case 'nutrition':
+              case 'daily_plan':
+                maxTokens = 550; // More tokens for content with references
+                break;
+              default:
+                maxTokens = 400;
+            }
+            
             const response = await openai.chat.completions.create({
               model: 'gpt-4',
               messages: [

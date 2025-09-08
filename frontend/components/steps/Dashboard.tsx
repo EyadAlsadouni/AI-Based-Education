@@ -10,40 +10,9 @@ import { DashboardContent, UserSession } from '../../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-interface DashboardCardProps {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  content: string;
-  onClick: () => void;
-}
 
-const DashboardCard: React.FC<DashboardCardProps> = ({
-  title,
-  description,
-  icon,
-  content,
-  onClick
-}) => {
-  return (
-    <div 
-      className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow cursor-pointer"
-      onClick={onClick}
-    >
-      <div className="flex items-start space-x-4">
-        <div className="text-3xl">{icon}</div>
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-          <p className="text-sm text-gray-600 mb-3">{description}</p>
-          <div className="text-sm text-blue-600 font-medium">
-            Click to explore →
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+
+
 
 interface ContentModalProps {
   isOpen: boolean;
@@ -70,24 +39,34 @@ const ContentModal: React.FC<ContentModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
       onClick={handleOverlayClick}
     >
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-y-auto shadow-2xl border border-gray-200">
-        <div className="p-8">
-          <div className="flex items-start justify-between mb-6">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[85vh] overflow-hidden shadow-2xl border border-gray-200">
+        {/* Modal Header */}
+        <div className="bg-gray-50 border-b border-gray-200 p-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <span className="text-3xl">{icon}</span>
-              <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-xl">
+                {icon}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+                <p className="text-sm text-gray-600">Evidence-based patient education content</p>
+              </div>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-3xl leading-none"
+              className="w-8 h-8 bg-white border border-gray-300 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
             >
               ×
             </button>
           </div>
-          <div className="prose prose-lg max-w-none">
+        </div>
+
+        {/* Modal Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+          <div className="prose prose-gray max-w-none">
             {content.split('\n').map((paragraph, index) => {
               if (paragraph.trim() === '') return null;
               
@@ -95,7 +74,12 @@ const ContentModal: React.FC<ContentModalProps> = ({
               if (paragraph.trim().toLowerCase().startsWith('references:')) {
                 return (
                   <div key={index} className="mt-8 pt-6 border-t border-gray-200">
-                    <h4 className="text-lg font-semibold text-gray-900 mb-4">{paragraph.trim()}</h4>
+                    <div className="flex items-center space-x-2 mb-4">
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-blue-600 text-xs font-bold">📚</span>
+                      </div>
+                      <h4 className="text-lg font-bold text-gray-900">{paragraph.trim()}</h4>
+                    </div>
                   </div>
                 );
               }
@@ -110,19 +94,25 @@ const ContentModal: React.FC<ContentModalProps> = ({
                 const url = urlMatch ? urlMatch[0] : null;
                 
                 return (
-                  <div key={index} className="mb-3 text-sm text-gray-600 leading-relaxed">
-                    <span className="font-medium text-blue-600">[{refNumber}]</span>
-                    <span className="ml-2">{textBeforeUrl}</span>
-                    {url && (
-                      <a 
-                        href={url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="ml-2 text-blue-600 hover:text-blue-800 underline break-all"
-                      >
-                        {url}
-                      </a>
-                    )}
+                  <div key={index} className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-blue-600 text-xs font-bold">{refNumber}</span>
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-gray-700 text-sm leading-relaxed">{textBeforeUrl}</span>
+                        {url && (
+                          <a 
+                            href={url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="block mt-2 text-blue-600 hover:text-blue-800 underline text-sm break-all"
+                          >
+                            {url}
+                          </a>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               }
@@ -131,7 +121,7 @@ const ContentModal: React.FC<ContentModalProps> = ({
               const parts = paragraph.split(/\*\*(.*?)\*\*/g);
               
               return (
-                <p key={index} className="mb-4 text-gray-700 leading-relaxed">
+                <div key={index} className="mb-4 leading-relaxed">
                   {parts.map((part, partIndex) => {
                     if (partIndex % 2 === 1) {
                       return <strong key={partIndex} className="font-bold text-gray-900">{part}</strong>;
@@ -143,7 +133,7 @@ const ContentModal: React.FC<ContentModalProps> = ({
                     return textWithRefs.map((textPart, textIndex) => {
                       if (/\[\d+\]/.test(textPart)) {
                         return (
-                          <span key={textIndex} className="text-blue-600 font-medium">
+                          <span key={textIndex} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mx-1">
                             {textPart}
                           </span>
                         );
@@ -161,19 +151,39 @@ const ContentModal: React.FC<ContentModalProps> = ({
                               href={urlPart} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 underline break-all"
+                              className="text-blue-600 hover:text-blue-800 underline break-all font-medium"
                             >
                               {urlPart}
                             </a>
                           );
                         }
-                        return urlPart;
+                        return <span key={urlIndex} className="text-gray-700">{urlPart}</span>;
                       });
                     });
                   })}
-                </p>
+                </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="bg-gray-50 border-t border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center">
+                <span className="text-green-600 text-xs">✓</span>
+              </div>
+              <span>Content generated by AI • Evidence-based information</span>
+            </div>
+            <Button
+              onClick={onClose}
+              variant="outline"
+              size="sm"
+              className="bg-white hover:bg-gray-50"
+            >
+              Close
+            </Button>
           </div>
         </div>
       </div>
@@ -408,7 +418,7 @@ export const DashboardComponent: React.FC = () => {
       pdf.text(`Generated on ${currentDate} by AI-Based Patient Education Platform`, margin, pageHeight - 10);
 
       // Save the PDF
-      const cleanName = userSession.full_name.replace(/[^a-zA-Z0-9]/g, '_');
+      const cleanName = (userSession.full_name || 'patient').replace(/[^a-zA-Z0-9]/g, '_');
       const cleanCondition = userSession.condition_selected.replace(/[^a-zA-Z0-9]/g, '_');
       const fileName = `${cleanName}_${cleanCondition}_Education_Report.pdf`;
       pdf.save(fileName);
@@ -436,131 +446,294 @@ export const DashboardComponent: React.FC = () => {
   const condition = userSession.condition_selected;
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          AI-Based Patient Education
-        </h1>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <h2 className="text-xl font-semibold text-green-900 mb-2">
-            Welcome to Your Dashboard, {firstName}!
-          </h2>
-          <p className="text-green-700">
-            Your personalized {condition} education center is ready.
-          </p>
+    <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
+      {/* Header Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">
+              Patient Education Dashboard
+            </h1>
+            <p className="text-gray-600">
+              AI-powered personalized health education for {condition}
+            </p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <p className="text-sm text-gray-500">Patient</p>
+              <p className="font-semibold text-gray-900">{firstName}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-blue-600 font-bold text-lg">
+                {firstName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* User Goal Display */}
-      {userSession.main_goal && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
-          <h3 className="text-lg font-semibold text-blue-900 mb-1">Your Goal:</h3>
-          <p className="text-blue-700">{userSession.main_goal}</p>
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Content Area - Left Side */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Education Cards Section */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <span className="text-blue-600 text-lg">📚</span>
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">Educational Content</h2>
+              </div>
+              <p className="text-gray-600 mt-2">
+                Personalized educational materials based on your condition and goals
+              </p>
+            </div>
+            
+            <div className="p-6">
+              {dashboardContent ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {DASHBOARD_CARDS.map((card) => {
+                    let content = '';
+                    switch (card.id) {
+                      case 'diagnosis':
+                        content = dashboardContent.diagnosis_basics;
+                        break;
+                      case 'nutrition':
+                        content = dashboardContent.nutrition_carbs;
+                        break;
+                      case 'workout':
+                        content = dashboardContent.workout;
+                        break;
+                      case 'daily_plan':
+                        content = dashboardContent.daily_plan;
+                        break;
+                    }
 
-      {/* Error Message */}
-      {error && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-sm text-yellow-700">
-            {error}
-            {dashboardContent && " We've provided basic information to get you started."}
-          </p>
-        </div>
-      )}
-
-      {/* Dashboard Cards */}
-      {dashboardContent ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {DASHBOARD_CARDS.map((card) => {
-              let content = '';
-              switch (card.id) {
-                case 'diagnosis':
-                  content = dashboardContent.diagnosis_basics;
-                  break;
-                case 'nutrition':
-                  content = dashboardContent.nutrition_carbs;
-                  break;
-                case 'workout':
-                  content = dashboardContent.workout;
-                  break;
-                case 'daily_plan':
-                  content = dashboardContent.daily_plan;
-                  break;
-              }
-
-              return (
-                <DashboardCard
-                  key={card.id}
-                  id={card.id}
-                  title={card.title}
-                  description={card.description}
-                  icon={card.icon}
-                  content={content}
-                  onClick={() => handleCardClick(card.id)}
-                />
-              );
-            })}
+                    return (
+                      <div
+                        key={card.id}
+                        className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-gray-50 hover:bg-white"
+                        onClick={() => handleCardClick(card.id)}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center text-lg">
+                            {card.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-gray-900 mb-1">{card.title}</h3>
+                            <p className="text-sm text-gray-600 mb-2">{card.description}</p>
+                            <div className="text-xs text-blue-600 font-medium">
+                              Click to explore →
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-yellow-600 text-2xl">⚡</span>
+                  </div>
+                  <h3 className="font-semibold text-gray-900 mb-2">Generating Content</h3>
+                  <p className="text-gray-600 mb-4">
+                    AI is preparing your personalized educational materials
+                  </p>
+                  <Button
+                    onClick={generateDashboardContent}
+                    loading={generatingContent}
+                    disabled={generatingContent}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Generate Content
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
-              onClick={generateDashboardContent}
-              loading={generatingContent}
-              disabled={generatingContent}
-              variant="outline"
-              className="hover:bg-gray-50 cursor-pointer transition-colors"
-            >
-              Refresh Content
-            </Button>
-            <Button
-              onClick={handleDownloadPDF}
-              disabled={!dashboardContent}
-              className="bg-green-600 text-white hover:bg-green-700 cursor-pointer transition-colors"
-            >
-              Download PDF Report
-            </Button>
-            <Button
-              onClick={handleStartOver}
-              variant="outline"
-              className="hover:bg-gray-50 cursor-pointer transition-colors"
-            >
-              Start Over
-            </Button>
+          {dashboardContent && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="font-semibold text-gray-900 mb-4">Actions</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={generateDashboardContent}
+                  loading={generatingContent}
+                  disabled={generatingContent}
+                  variant="outline"
+                  className="hover:bg-gray-50"
+                >
+                  <span className="mr-2">🔄</span>
+                  Refresh Content
+                </Button>
+                <Button
+                  onClick={handleDownloadPDF}
+                  disabled={!dashboardContent}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <span className="mr-2">📄</span>
+                  Download Report
+                </Button>
+                <Button
+                  onClick={handleStartOver}
+                  variant="outline"
+                  className="hover:bg-gray-50"
+                >
+                  <span className="mr-2">🔄</span>
+                  Start Over
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Patient Summary Sidebar - Right Side */}
+        <div className="space-y-6">
+          {/* Patient Summary Card */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <span className="text-green-600 text-lg">👤</span>
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">Patient Summary</h2>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-1">Name</h4>
+                <p className="text-gray-600">{userSession.full_name}</p>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-1">Age & Gender</h4>
+                <p className="text-gray-600">{userSession.age} years, {userSession.gender}</p>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-1">Primary Condition</h4>
+                <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  {condition}
+                </div>
+              </div>
+              
+              {userSession.main_goal && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-1">Health Goal</h4>
+                  <p className="text-gray-600 text-sm">{userSession.main_goal}</p>
+                </div>
+              )}
+              
+              {userSession.main_question && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-1">Specific Concerns</h4>
+                  <p className="text-gray-600 text-sm">{userSession.main_question}</p>
+                </div>
+              )}
+            </div>
           </div>
-        </>
-      ) : (
-        <div className="text-center py-12">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-            <p className="text-yellow-700">
-              Dashboard content is being prepared. Please refresh the page or click 'Refresh Content' below.
+
+          {/* Education Features */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900">Education Features</h3>
+            </div>
+            <div className="p-6 space-y-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-xs">✓</span>
+                </div>
+                <span className="text-sm text-gray-700">AI-powered content generation</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-xs">✓</span>
+                </div>
+                <span className="text-sm text-gray-700">Personalized recommendations</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-xs">✓</span>
+                </div>
+                <span className="text-sm text-gray-700">Evidence-based information</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-xs">✓</span>
+                </div>
+                <span className="text-sm text-gray-700">Interactive learning</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-xs">✓</span>
+                </div>
+                <span className="text-sm text-gray-700">Progress tracking</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-green-600 text-xs">✓</span>
+                </div>
+                <span className="text-sm text-gray-700">PDF report generation</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Status */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Completion Status</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700">Assessment Complete</span>
+                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 text-xs">✓</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700">Content Generated</span>
+                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 text-xs">✓</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700">Dashboard Ready</span>
+                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 text-xs">✓</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-900">Overall Progress</span>
+                  <span className="font-bold text-green-600">100%</span>
+                </div>
+                <div className="mt-2 bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-600 h-2 rounded-full w-full"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center space-x-3">
+            <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+              <span className="text-red-600 text-sm">!</span>
+            </div>
+            <p className="text-sm text-red-700">
+              {error}
+              {dashboardContent && " We've provided basic information to get you started."}
             </p>
-            <Button
-              onClick={generateDashboardContent}
-              loading={generatingContent}
-              disabled={generatingContent}
-              className="mt-4"
-            >
-              Generate Content
-            </Button>
           </div>
         </div>
       )}
-
-      {/* Progress Indicator */}
-      <div className="mt-8 text-center">
-        <div className="flex justify-center space-x-2 mb-2">
-          {[1, 2, 3, 4, 5].map((step) => (
-            <div
-              key={step}
-              className="w-3 h-3 rounded-full bg-green-600"
-            />
-          ))}
-        </div>
-        <p className="text-sm text-gray-500">Complete! Dashboard Ready</p>
-      </div>
 
       {/* Content Modal */}
       <ContentModal

@@ -192,7 +192,7 @@ export const Step4Component: React.FC = () => {
   const condition = userSession.condition_selected;
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6">
       {/* Dashboard Generation Overlay */}
       {generatingDashboard && (
         <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
@@ -207,159 +207,193 @@ export const Step4Component: React.FC = () => {
         </div>
       )}
       
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          AI-Based Patient Education
-        </h1>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h2 className="text-xl font-semibold text-blue-900 mb-2">
-            Step 4: Goals & Questions
-          </h2>
-          <p className="text-blue-700">
-            Tell us about your goals and any specific questions you have about {condition}.
+      {/* Header Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-blue-600 text-2xl">🎯</span>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            AI-Based Patient Education Platform
+          </h1>
+          <p className="text-lg text-gray-600 mb-6">
+            Evidence-based, personalized health education powered by artificial intelligence
           </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-center justify-center space-x-3 mb-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <span className="text-blue-600 font-bold">4</span>
+              </div>
+              <h2 className="text-xl font-semibold text-blue-900">
+                Goals & Personalization
+              </h2>
+            </div>
+            <p className="text-blue-700">
+              Share your health goals and questions to receive personalized {condition} education.
+            </p>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Main Goal Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            What is your main goal right now?
-            <span className="text-red-500 ml-1">*</span>
-          </label>
-          
-          {loadingGoals ? (
-            <div className="flex items-center justify-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      {/* Goals and Questions Form */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Personal Health Goals</h3>
+          <p className="text-gray-600">Help us create a customized educational experience tailored to your specific needs.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Main Goal Selection */}
+          <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-4">
+              What is your main goal right now?
+              <span className="text-red-500 ml-1">*</span>
+            </label>
+            
+            {loadingGoals ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {availableGoals.map((goal) => (
+                  <label key={goal} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="main_goal"
+                      value={goal}
+                      checked={!showCustomGoal && formData.main_goal === goal}
+                      onChange={() => handleGoalChange(goal)}
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="text-sm text-gray-700 leading-5 font-medium">{goal}</span>
+                  </label>
+                ))}
+                
+                {/* Custom goal input */}
+                {showCustomGoal && (
+                  <div className="mt-4 p-4 bg-white rounded-lg border border-blue-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Custom Goal:</label>
+                    <input
+                      type="text"
+                      placeholder="Enter your custom goal..."
+                      value={customGoal}
+                      onChange={(e) => handleCustomGoalChange(e.target.value)}
+                      className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                      autoFocus
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {errors.main_goal && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{errors.main_goal}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Main Question */}
+          <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+            <Textarea
+              label={`What is your biggest question about ${condition}?`}
+              placeholder={`e.g., "What can I eat for breakfast that won't spike my blood sugar?" or "How often should I exercise?"`}
+              value={formData.main_question || ''}
+              onChange={(e) => updateFormData('main_question', e.target.value)}
+              rows={4}
+              hint="Optional - This helps us provide more personalized information"
+            />
+          </div>
+
+          {/* Example Questions */}
+          <div className="p-6 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 text-xs">❓</span>
+              </div>
+              <h3 className="text-sm font-medium text-gray-900">
+                Common questions about {condition}:
+              </h3>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {availableGoals.map((goal) => (
-                <label key={goal} className="flex items-start space-x-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="main_goal"
-                    value={goal}
-                    checked={!showCustomGoal && formData.main_goal === goal}
-                    onChange={() => handleGoalChange(goal)}
-                    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700 leading-5">{goal}</span>
-                </label>
-              ))}
-              
-              {/* Custom goal input */}
-              {showCustomGoal && (
-                <div className="ml-7 mt-3">
-                  <input
-                    type="text"
-                    placeholder="Enter your custom goal..."
-                    value={customGoal}
-                    onChange={(e) => handleCustomGoalChange(e.target.value)}
-                    className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-                    autoFocus
-                  />
-                </div>
+            <ul className="text-sm text-gray-700 space-y-2 ml-9">
+              {condition === 'Diabetes' && (
+                <>
+                  <li>• "What foods should I avoid?"</li>
+                  <li>• "How do I count carbohydrates?"</li>
+                  <li>• "What should my blood sugar levels be?"</li>
+                  <li>• "How often should I check my glucose?"</li>
+                </>
               )}
-            </div>
-          )}
-          
-          {errors.main_goal && (
-            <p className="mt-2 text-sm text-red-600">{errors.main_goal}</p>
-          )}
-        </div>
+              {condition === 'Heart Health' && (
+                <>
+                  <li>• "What exercises are safe for my heart?"</li>
+                  <li>• "How can I lower my cholesterol naturally?"</li>
+                  <li>• "What foods are heart-healthy?"</li>
+                  <li>• "How do I manage stress for better heart health?"</li>
+                </>
+              )}
+              {condition === 'Pre-Procedure Prep' && (
+                <>
+                  <li>• "How should I prepare for my procedure?"</li>
+                  <li>• "What should I expect during recovery?"</li>
+                  <li>• "What medications should I stop before the procedure?"</li>
+                  <li>• "How can I manage pre-procedure anxiety?"</li>
+                </>
+              )}
+              {condition === 'Mental Wellness' && (
+                <>
+                  <li>• "How can I manage my anxiety daily?"</li>
+                  <li>• "What are healthy coping strategies?"</li>
+                  <li>• "How important is sleep for mental health?"</li>
+                  <li>• "When should I seek additional help?"</li>
+                </>
+              )}
+            </ul>
+          </div>
 
-        {/* Main Question */}
-        <div>
-          <Textarea
-            label={`What is your biggest question about ${condition}?`}
-            placeholder={`e.g., "What can I eat for breakfast that won't spike my blood sugar?" or "How often should I exercise?"`}
-            value={formData.main_question || ''}
-            onChange={(e) => updateFormData('main_question', e.target.value)}
-            rows={4}
-            hint="Optional - This helps us provide more personalized information"
-          />
-        </div>
-
-        {/* Example Questions */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
-            Common questions about {condition}:
-          </h3>
-          <ul className="text-sm text-gray-600 space-y-1">
-            {condition === 'Diabetes' && (
-              <>
-                <li>• "What foods should I avoid?"</li>
-                <li>• "How do I count carbohydrates?"</li>
-                <li>• "What should my blood sugar levels be?"</li>
-                <li>• "How often should I check my glucose?"</li>
-              </>
-            )}
-            {condition === 'Heart Health' && (
-              <>
-                <li>• "What exercises are safe for my heart?"</li>
-                <li>• "How can I lower my cholesterol naturally?"</li>
-                <li>• "What foods are heart-healthy?"</li>
-                <li>• "How do I manage stress for better heart health?"</li>
-              </>
-            )}
-            {condition === 'Pre-Procedure Prep' && (
-              <>
-                <li>• "How should I prepare for my procedure?"</li>
-                <li>• "What should I expect during recovery?"</li>
-                <li>• "What medications should I stop before the procedure?"</li>
-                <li>• "How can I manage pre-procedure anxiety?"</li>
-              </>
-            )}
-            {condition === 'Mental Wellness' && (
-              <>
-                <li>• "How can I manage my anxiety daily?"</li>
-                <li>• "What are healthy coping strategies?"</li>
-                <li>• "How important is sleep for mental health?"</li>
-                <li>• "When should I seek additional help?"</li>
-              </>
-            )}
-          </ul>
-        </div>
-
-        {/* Navigation Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleBack}
-            disabled={loading || generatingDashboard}
-            className="order-2 sm:order-1"
-          >
-            Back
-          </Button>
-          
-          <Button
-            type="submit"
-            loading={loading}
-            disabled={loading || generatingDashboard}
-            className="order-1 sm:order-2"
-            size="lg"
-          >
-            {loading ? 'Creating Dashboard...' : 'Create My Dashboard'}
-          </Button>
-        </div>
-      </form>
+          {/* Navigation Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6 border-t border-gray-200">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBack}
+              disabled={loading || generatingDashboard}
+              className="order-2 sm:order-1 hover:bg-gray-50"
+            >
+              <span className="mr-2">←</span>
+              Back to Health Assessment
+            </Button>
+            
+            <Button
+              type="submit"
+              loading={loading}
+              disabled={loading || generatingDashboard}
+              className="order-1 sm:order-2 bg-green-600 hover:bg-green-700"
+              size="lg"
+            >
+              <span className="mr-2">🎆</span>
+              {loading ? 'Creating Dashboard...' : 'Create My Dashboard'}
+            </Button>
+          </div>
+        </form>
+      </div>
 
       {/* Progress Indicator */}
       <div className="mt-8 text-center">
-        <div className="flex justify-center space-x-2 mb-2">
-          {[1, 2, 3, 4, 5].map((step) => (
-            <div
-              key={step}
-              className={`w-3 h-3 rounded-full ${
-                step <= 4 ? 'bg-blue-600' : 'bg-gray-300'
-              }`}
-            />
-          ))}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex justify-center space-x-2 mb-2">
+            {[1, 2, 3, 4, 5].map((step) => (
+              <div
+                key={step}
+                className={`w-3 h-3 rounded-full ${
+                  step <= 4 ? 'bg-green-600' : 'bg-gray-300'
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-sm text-gray-500">Step 4 of 5 - Almost Ready!</p>
         </div>
-        <p className="text-sm text-gray-500">Step 4 of 5</p>
       </div>
     </div>
   );

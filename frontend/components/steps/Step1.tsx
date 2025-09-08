@@ -106,110 +106,126 @@ export const Step1Component: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          AI-Based Patient Education
-        </h1>
-        <p className="text-lg text-gray-600 mb-6">
-          Your personal guide to understanding your health.
-        </p>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h2 className="text-xl font-semibold text-blue-900 mb-2">
-            Step 1: Tell us a bit about you
-          </h2>
-          <p className="text-blue-700">
-            This information helps us personalize your health education experience.
+    <div className="max-w-4xl mx-auto p-6">
+      {/* Header Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-blue-600 text-2xl">🏥</span>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            AI-Based Patient Education Platform
+          </h1>
+          <p className="text-lg text-gray-600 mb-6">
+            Evidence-based, personalized health education powered by artificial intelligence
           </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-center justify-center space-x-3 mb-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <span className="text-blue-600 font-bold">1</span>
+              </div>
+              <h2 className="text-xl font-semibold text-blue-900">
+                Patient Information
+              </h2>
+            </div>
+            <p className="text-blue-700">
+              Please provide your basic information to personalize your health education experience.
+            </p>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Full Name */}
-        <Input
-          label="Full Name"
-          placeholder="Enter your full name"
-          value={formData.full_name}
-          onChange={(e) => updateFormData('full_name', e.target.value)}
-          error={errors.full_name}
-          required
-        />
-
-        {/* Gender and Age Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Gender"
-            value={formData.gender}
-            onChange={(e) => updateFormData('gender', e.target.value as 'male' | 'female' | 'other')}
-            options={GENDER_OPTIONS}
-            required
-          />
-          
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Full Name */}
           <Input
-            label="Age"
-            type="number"
-            placeholder="Enter your age"
-            value={formData.age || ''}
-            onChange={(e) => updateFormData('age', parseInt(e.target.value) || 0)}
-            error={errors.age}
-            min={1}
-            max={120}
+            label="Full Name"
+            placeholder="Enter your full name"
+            value={formData.full_name}
+            onChange={(e) => updateFormData('full_name', e.target.value)}
+            error={errors.full_name}
             required
           />
-        </div>
 
-        {/* Health Goals */}
-        <div className="space-y-3">
-          <label className="block text-sm font-medium text-gray-700">
-            What is your primary health goal? 
-            <span className="text-red-500 ml-1">*</span>
-            <span className="text-gray-500 font-normal"> (Select all that apply)</span>
-          </label>
-          <div className="space-y-3">
-            {HEALTH_GOALS.map((goal) => (
-              <label key={goal} className="flex items-start space-x-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  checked={formData.health_goals.includes(goal)}
-                  onChange={(e) => handleHealthGoalChange(goal, e.target.checked)}
-                />
-                <span className="text-sm text-gray-700 leading-5">{goal}</span>
-              </label>
-            ))}
+          {/* Gender and Age Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Gender"
+              value={formData.gender}
+              onChange={(e) => updateFormData('gender', e.target.value as 'male' | 'female' | 'other')}
+              options={GENDER_OPTIONS}
+              required
+            />
+            
+            <Input
+              label="Age"
+              type="number"
+              placeholder="Enter your age"
+              value={formData.age || ''}
+              onChange={(e) => updateFormData('age', parseInt(e.target.value) || 0)}
+              error={errors.age}
+              min={1}
+              max={120}
+              required
+            />
           </div>
-          {errors.health_goals && (
-            <p className="text-sm text-red-600">{errors.health_goals}</p>
-          )}
-        </div>
 
-        {/* Submit Button */}
-        <div className="pt-6">
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            loading={loading}
-            disabled={loading}
-          >
-            Continue to Condition Selection
-          </Button>
-        </div>
-      </form>
+          {/* Health Goals */}
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">
+              What is your primary health goal? 
+              <span className="text-red-500 ml-1">*</span>
+              <span className="text-gray-500 font-normal"> (Select all that apply)</span>
+            </label>
+            <div className="space-y-3">
+              {HEALTH_GOALS.map((goal) => (
+                <label key={goal} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    checked={formData.health_goals.includes(goal)}
+                    onChange={(e) => handleHealthGoalChange(goal, e.target.checked)}
+                  />
+                  <span className="text-sm text-gray-700 leading-5">{goal}</span>
+                </label>
+              ))}
+            </div>
+            {errors.health_goals && (
+              <p className="text-sm text-red-600">{errors.health_goals}</p>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <div className="pt-6">
+            <Button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              size="lg"
+              loading={loading}
+              disabled={loading}
+            >
+              <span className="mr-2">→</span>
+              Continue to Condition Selection
+            </Button>
+          </div>
+        </form>
+      </div>
 
       {/* Progress Indicator */}
       <div className="mt-8 text-center">
-        <div className="flex justify-center space-x-2 mb-2">
-          {[1, 2, 3, 4, 5].map((step) => (
-            <div
-              key={step}
-              className={`w-3 h-3 rounded-full ${
-                step === 1 ? 'bg-blue-600' : 'bg-gray-300'
-              }`}
-            />
-          ))}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex justify-center space-x-2 mb-2">
+            {[1, 2, 3, 4, 5].map((step) => (
+              <div
+                key={step}
+                className={`w-3 h-3 rounded-full ${
+                  step === 1 ? 'bg-green-600' : 'bg-gray-300'
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-sm text-gray-500">Step 1 of 5 - Patient Information</p>
         </div>
-        <p className="text-sm text-gray-500">Step 1 of 5</p>
       </div>
     </div>
   );

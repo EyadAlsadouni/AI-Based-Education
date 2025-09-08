@@ -116,100 +116,127 @@ export const Step2Component: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          AI-Based Patient Education
-        </h1>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h2 className="text-xl font-semibold text-blue-900 mb-2">
-            Step 2: Condition Selection
-          </h2>
-          <p className="text-blue-700">
-            Please select your primary condition to get personalized guidance.
+      {/* Header Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-blue-600 text-2xl">🏥</span>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            AI-Based Patient Education Platform
+          </h1>
+          <p className="text-lg text-gray-600 mb-6">
+            Evidence-based, personalized health education powered by artificial intelligence
           </p>
-        </div>
-      </div>
-
-      {/* Condition Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {conditions.map((condition) => (
-          <button
-            key={condition.id}
-            className={`p-6 rounded-lg border-2 transition-all duration-200 text-left hover:shadow-md ${
-              selectedCondition === condition.name
-                ? 'border-blue-500 bg-blue-50 shadow-md'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}
-            onClick={() => handleConditionSelect(condition.name)}
-          >
-            <div className="flex items-center space-x-4">
-              <div className="text-4xl">{condition.icon}</div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {condition.name}
-                </h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  {condition.description}
-                </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-center justify-center space-x-3 mb-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <span className="text-blue-600 font-bold">2</span>
               </div>
-              {selectedCondition === condition.name && (
-                <div className="text-blue-500">
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              )}
+              <h2 className="text-xl font-semibold text-blue-900">
+                Condition Selection
+              </h2>
             </div>
-          </button>
-        ))}
+            <p className="text-blue-700">
+              Select your primary health condition to receive personalized educational content.
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-600">{error}</p>
+      {/* Condition Selection Form */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Available Conditions</h3>
+          <p className="text-gray-600">Choose the condition that best matches your health education needs.</p>
         </div>
-      )}
 
-      {/* Navigation Buttons */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <Button
-          variant="outline"
-          onClick={handleBack}
-          disabled={loading}
-          className="order-2 sm:order-1"
-        >
-          Back
-        </Button>
-        
-        <Button
-          onClick={handleContinue}
-          loading={loading}
-          disabled={!selectedCondition || loading}
-          className="order-1 sm:order-2"
-          size="lg"
-        >
-          Continue to Health Assessment
-        </Button>
+        {/* Condition Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {conditions.map((condition) => (
+            <button
+              key={condition.id}
+              className={`p-6 rounded-lg border-2 transition-all duration-200 text-left hover:shadow-md medical-card ${
+                selectedCondition === condition.name
+                  ? 'border-blue-500 bg-blue-50 shadow-md'
+                  : 'border-gray-200 hover:border-blue-300'
+              }`}
+              onClick={() => handleConditionSelect(condition.name)}
+            >
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-white rounded-lg border border-gray-200 flex items-center justify-center text-2xl">
+                  {condition.icon}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                    {condition.name}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {condition.description}
+                  </p>
+                </div>
+                {selectedCondition === condition.name && (
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 text-sm">✓</span>
+                  </div>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-red-600 text-sm">!</span>
+              </div>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6">
+          <Button
+            variant="outline"
+            onClick={handleBack}
+            disabled={loading}
+            className="order-2 sm:order-1 hover:bg-gray-50"
+          >
+            <span className="mr-2">←</span>
+            Back to Patient Information
+          </Button>
+          
+          <Button
+            onClick={handleContinue}
+            loading={loading}
+            disabled={!selectedCondition || loading}
+            className="order-1 sm:order-2 bg-blue-600 hover:bg-blue-700"
+            size="lg"
+          >
+            <span className="mr-2">→</span>
+            Continue to Health Assessment
+          </Button>
+        </div>
       </div>
 
       {/* Progress Indicator */}
       <div className="mt-8 text-center">
-        <div className="flex justify-center space-x-2 mb-2">
-          {[1, 2, 3, 4, 5].map((step) => (
-            <div
-              key={step}
-              className={`w-3 h-3 rounded-full ${
-                step <= 2 ? 'bg-blue-600' : 'bg-gray-300'
-              }`}
-            />
-          ))}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex justify-center space-x-2 mb-2">
+            {[1, 2, 3, 4, 5].map((step) => (
+              <div
+                key={step}
+                className={`w-3 h-3 rounded-full ${
+                  step <= 2 ? 'bg-green-600' : 'bg-gray-300'
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-sm text-gray-500">Step 2 of 5 - Condition Selection</p>
         </div>
-        <p className="text-sm text-gray-500">Step 2 of 5</p>
       </div>
     </div>
   );

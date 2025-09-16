@@ -512,7 +512,7 @@ export const DashboardComponent: React.FC = () => {
                     return (
                       <div
                         key={card.id}
-                        className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-gray-50 hover:bg-white"
+                        className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-gray-50 hover:bg-white hover:scale-[1.02]"
                         onClick={() => handleCardClick(card.id)}
                       >
                         <div className="flex items-start space-x-3">
@@ -544,7 +544,7 @@ export const DashboardComponent: React.FC = () => {
                     onClick={generateDashboardContent}
                     loading={generatingContent}
                     disabled={generatingContent}
-                    className="bg-blue-600 hover:bg-blue-700"
+                    className="bg-blue-600 hover:bg-blue-700 cursor-pointer hover:scale-105 transition-transform"
                   >
                     Generate Content
                   </Button>
@@ -555,35 +555,69 @@ export const DashboardComponent: React.FC = () => {
 
           {/* Action Buttons */}
           {dashboardContent && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Actions</h3>
-              <div className="flex flex-wrap gap-3">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">Actions</h2>
+              
+              {/* Primary Action Buttons */}
+              <div className="flex justify-center gap-3 mb-6">
                 <Button
                   onClick={generateDashboardContent}
                   loading={generatingContent}
                   disabled={generatingContent}
-                  variant="outline"
-                  className="hover:bg-gray-50"
+                  className="bg-white hover:bg-blue-50 border-2 border-gray-300 hover:border-blue-400 text-gray-700 hover:text-blue-700 cursor-pointer transition-all px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm hover:shadow-md"
                 >
-                  <span className="mr-2">🔄</span>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                   Refresh Content
                 </Button>
+                
                 <Button
                   onClick={handleDownloadPDF}
                   disabled={!dashboardContent}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-green-600 hover:bg-green-700 text-white cursor-pointer transition-all px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-md hover:shadow-lg transform hover:scale-105"
                 >
-                  <span className="mr-2">📄</span>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
                   Download Report
                 </Button>
+                
                 <Button
                   onClick={handleStartOver}
-                  variant="outline"
-                  className="hover:bg-gray-50"
+                  className="bg-white hover:bg-blue-50 border-2 border-gray-300 hover:border-blue-400 text-gray-700 hover:text-blue-700 cursor-pointer transition-all px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm hover:shadow-md"
                 >
-                  <span className="mr-2">🔄</span>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
                   Start Over
                 </Button>
+              </div>
+              
+              {/* Divider */}
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">or</span>
+                </div>
+              </div>
+              
+              {/* Voice Coach Button */}
+              <div className="text-center">
+                <Button
+                  onClick={() => router.push('/voice-coach')}
+                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white cursor-pointer transition-all transform hover:scale-105 px-8 py-3 rounded-lg inline-flex items-center gap-2.5 font-semibold text-base shadow-lg hover:shadow-xl"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                  Talk to Voice Coach
+                </Button>
+                <p className="text-sm text-gray-500 mt-3">
+                  Interact with your AI health assistant using voice
+                </p>
               </div>
             </div>
           )}

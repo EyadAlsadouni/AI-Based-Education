@@ -31,6 +31,8 @@ coverage/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -43,7 +45,19 @@ logs
 # Cache
 .cache/
 .parcel-cache/
+.eslintcache
 
 # Database
 *.sqlite
 *.db
+
+# Voice Coach specific
+audio_cache/
+*.wav
+*.mp3
+*.m4a
+*.opus
+
+# Temporary files
+tmp/
+temp/

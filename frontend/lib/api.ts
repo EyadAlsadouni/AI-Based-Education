@@ -10,7 +10,13 @@ import {
   UserCreateResponse,
   SessionCreateResponse,
   DashboardResponse,
-  ApiResponse
+  ApiResponse,
+  VoiceCard,
+  VoiceProfile,
+  VoiceSessionResponse,
+  TTSSummaryResponse,
+  VoiceCardsResponse,
+  VoiceProfileResponse
 } from '../types';
 
 // Create axios instance with base configuration
@@ -108,6 +114,43 @@ export const aiApi = {
     const response = await api.get(`/ai/dashboard/${userId}`);
     return response.data;
   },
+};
+
+// Voice Coach API functions
+export const voiceApi = {
+  // Create voice session
+  createSession: async (userId: number, lang: string = 'en'): Promise<VoiceSessionResponse> => {
+    const response = await api.post('/voice/session', { user_id: userId, lang });
+    return response.data;
+  },
+
+  // Get user's voice cards
+  getCards: async (userId: number): Promise<VoiceCardsResponse> => {
+    const response = await api.get(`/voice/cards/${userId}`);
+    return response.data;
+  },
+
+  // Get user profile for voice coach
+  getProfile: async (userId: number): Promise<VoiceProfileResponse> => {
+    const response = await api.get(`/voice/profile/${userId}`);
+    return response.data;
+  },
+
+  // Summarize card content to TTS (new OpenAI approach)
+  summarizeCard: async (userId: number, cardId: string): Promise<TTSSummaryResponse> => {
+    const response = await api.post('/voice/summarize-card-v2', { 
+      user_id: userId, 
+      card_id: cardId 
+    });
+    return response.data;
+  },
+
+  // Get WebSocket URL for voice chat
+  getWebSocketUrl: (): string => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const wsUrl = baseUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+    return `${wsUrl.replace('/api', '')}/api/voice/chat`;
+  }
 };
 
 // Error handling helper

@@ -114,3 +114,81 @@ export interface DashboardResponse {
   };
   note?: string;
 }
+
+// Voice Coach types
+export interface VoiceCard {
+  id: string;
+  title: string;
+  updated_at: string;
+  duration_estimate: number;
+  has_content: boolean;
+}
+
+export interface VoiceProfile {
+  id: string;
+  full_name: string;
+  gender: string;
+  age: number;
+  health_goals: string[];
+  condition_selected?: string;
+  diagnosis_year?: number;
+  takes_medication: boolean;
+  medications: string[];
+  checks_vitals?: string;
+  main_goal?: string;
+  main_question?: string;
+}
+
+export interface VoiceSessionResponse {
+  success: boolean;
+  session_id: string;
+  message: string;
+}
+
+export interface TTSSummaryResponse {
+  success: boolean;
+  script_text: string;
+  audio_url: string;
+  duration_ms: number;
+  cache_key: string;
+  cached: boolean;
+}
+
+export interface VoiceCardsResponse {
+  success: boolean;
+  cards: VoiceCard[];
+  user_context: {
+    name: string;
+    condition: string;
+  };
+}
+
+export interface VoiceProfileResponse {
+  success: boolean;
+  profile: VoiceProfile;
+}
+
+// WebSocket message types
+export interface WSMessage {
+  type: string;
+  [key: string]: any;
+}
+
+export interface WSAudioChunk {
+  type: 'audio_chunk';
+  chunk_index: number;
+  audio_data: string;
+  is_final: boolean;
+}
+
+export interface WSTextResponse {
+  type: 'answer_final';
+  text: string;
+  grounded: boolean;
+  sources: string[];
+}
+
+export interface WSASRResult {
+  type: 'asr_partial' | 'asr_final';
+  transcript: string;
+}

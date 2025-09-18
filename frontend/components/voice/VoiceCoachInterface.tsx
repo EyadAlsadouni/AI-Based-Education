@@ -8,6 +8,7 @@ import { AvatarLoop, AvatarLoopRef } from './AvatarLoop';
 import { VoicePreferences, VoicePreferences as VoicePreferencesType } from './VoicePreferences';
 import { voiceApi } from '../../lib/api';
 import { VoiceCard, VoiceProfile } from '../../types';
+import AudioManager from '../../lib/useAudioManager';
 
 interface VoiceCoachInterfaceProps {
   userId: number;
@@ -35,6 +36,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
 
   const realtimeSession = useOpenAIRealtime();
   const avatarRef = useRef<AvatarLoopRef>(null);
+  const audioManager = AudioManager.getInstance();
 
   useEffect(() => {
     initializeVoiceCoach();
@@ -86,91 +88,94 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     }
   };
 
-  const handleCardSelect = async (card: VoiceCard) => {
-    try {
-      // If clicking on the currently selected card that's playing or paused
-      if (selectedCard?.id === card.id && currentAudio) {
-        if (isPausedCard) {
-          // Resume playback
-          currentAudio.play();
-          avatarRef.current?.play();
-          setIsPausedCard(false);
-          setIsPlayingCard(true);
-        } else if (isPlayingCard) {
-          // Pause playback
-          currentAudio.pause();
-          avatarRef.current?.pause();
-          setIsPausedCard(true);
-          setIsPlayingCard(false);
-        }
-        return;
-      }
-
-      // Stop any current audio if playing a different card
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        setIsPlayingCard(false);
-        setIsPausedCard(false);
-        avatarRef.current?.pause();
-      }
-
-      setSelectedCard(card);
-      setMode('listen');
+  // Playback event logging and avatar sync
+  useEffect(() => {
+    const handleStart = () => {
       setIsPlayingCard(true);
       setIsPausedCard(false);
+      avatarRef.current?.play();
+      console.log('[AudioManager] start');
+    };
+    const handleEnd = () => {
+      setIsPlayingCard(false);
+      setIsPausedCard(false);
+      avatarRef.current?.pause();
+      setSelectedCard(null);
+      console.log('[AudioManager] end');
+    };
+    const handleError = (err: any) => {
+      setIsPlayingCard(false);
+      setIsPausedCard(false);
+      avatarRef.current?.pause();
+      setError('Failed to play audio');
+      setSelectedCard(null);
+      console.log('[AudioManager] error', err);
+    };
+    audioManager.on('start', handleStart);
+    audioManager.on('end', handleEnd);
+    audioManager.on('error', handleError);
+    return () => {
+      audioManager.off('start', handleStart);
+      audioManager.off('end', handleEnd);
+      audioManager.off('error', handleError);
+    };
+  }, [audioManager]);
 
+  // Robust pause/resume logic for card playback
+  const handleCardSelect = async (card: VoiceCard) => {
+    try {
+      // If clicking the currently selected card
+      if (selectedCard?.id === card.id) {
+        if (audioManager.getIsPlaying()) {
+          // Pause if currently playing
+          audioManager.pause();
+          setIsPausedCard(true);
+          setIsPlayingCard(false);
+          avatarRef.current?.pause();
+          return;
+        } else if (isPausedCard) {
+          // Resume if currently paused
+          audioManager.resume();
+          setIsPausedCard(false);
+          setIsPlayingCard(true);
+          avatarRef.current?.play();
+          return;
+        } else {
+          // If not playing or paused, do nothing (should not happen)
+          return;
+        }
+      }
+      // If a different card, stop current audio and play new
+      audioManager.stop();
+      setIsPlayingCard(false);
+      setIsPausedCard(false);
+      avatarRef.current?.pause();
+      setSelectedCard(card);
+      setMode('listen');
       // Play card summary using new gpt-4o-mini-tts approach
       const summaryResponse = await voiceApi.summarizeCard(userId, card.id);
-
       if (summaryResponse.audio_url) {
-        // Start avatar animation
-        avatarRef.current?.play();
-        
-        // Play audio (this will be handled by the cached TTS system)
-        const audio = new Audio(summaryResponse.audio_url);
-        setCurrentAudio(audio);
-        
-        audio.onended = () => {
-          // Stop avatar animation when audio ends
-          setTimeout(() => {
-            avatarRef.current?.pause();
-            setIsPlayingCard(false);
-            setIsPausedCard(false);
-            setCurrentAudio(null);
-            setSelectedCard(null);
-          }, 120); // ≤120ms delay requirement
-        };
-        
-        audio.onerror = () => {
-          setIsPlayingCard(false);
-          setIsPausedCard(false);
-          setCurrentAudio(null);
-          avatarRef.current?.pause();
-        };
-        
-        await audio.play();
+        // Wait for audioManager.play to resolve, then avatar will start via event
+        await audioManager.play(summaryResponse.audio_url);
+        setIsPlayingCard(true);
+        setIsPausedCard(false);
       }
-
     } catch (error) {
       console.error('Error playing card summary:', error);
       setError('Failed to play card summary');
       setIsPlayingCard(false);
       setIsPausedCard(false);
-      setCurrentAudio(null);
+      setSelectedCard(null);
+      avatarRef.current?.pause();
     }
   };
 
   const handleStopAudio = () => {
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      setIsPlayingCard(false);
-      setIsPausedCard(false);
-      setCurrentAudio(null);
-      setSelectedCard(null);
-      avatarRef.current?.pause();
-    }
+    audioManager.stop();
+    setIsPlayingCard(false);
+    setIsPausedCard(false);
+    setSelectedCard(null);
+    avatarRef.current?.pause();
   };
 
   const handleMicToggle = () => {

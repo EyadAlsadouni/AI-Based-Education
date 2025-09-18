@@ -2,20 +2,145 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-export interface AudioManagerHook {
-  isRecording: boolean;
-  isPlaying: boolean;
-  volume: number;
-  error: string | null;
-  startRecording: () => Promise<void>;
-  stopRecording: () => void;
-  playAudio: (audioData: string) => Promise<void>;
-  stopAudio: () => void;
-  setVolume: (volume: number) => void;
-  clearError: () => void;
-  hasPermission: boolean;
-  requestPermission: () => Promise<boolean>;
+// Lightweight event emitter for browser
+class SimpleEmitter {
+  private listeners: Record<string, Set<(...args: any[]) => void>> = {};
+
+  on(event: string, handler: (...args: any[]) => void) {
+    if (!this.listeners[event]) this.listeners[event] = new Set();
+    this.listeners[event].add(handler);
+  }
+
+  off(event: string, handler: (...args: any[]) => void) {
+    this.listeners[event]?.delete(handler);
+  }
+
+  emit(event: string, ...args: any[]) {
+    this.listeners[event]?.forEach((h) => {
+      try { h(...args); } catch (_) {}
+    });
+  }
 }
+
+// AudioManager singleton
+class AudioManager {
+  private static instance: AudioManager;
+  private audioContext: AudioContext | null = null;
+  private audioElement: HTMLAudioElement | null = null;
+  private eventEmitter = new SimpleEmitter();
+  private isPlaying = false;
+  private isPaused = false;
+  private currentUrl: string | null = null;
+
+  private constructor() {}
+
+  public static getInstance(): AudioManager {
+    if (!AudioManager.instance) {
+      AudioManager.instance = new AudioManager();
+    }
+    return AudioManager.instance;
+  }
+
+  private ensureAudioElement() {
+    if (!this.audioElement) {
+      this.audioElement = new Audio();
+      this.audioElement.preload = 'auto';
+      this.audioElement.onplay = () => this.eventEmitter.emit('start');
+      this.audioElement.onpause = () => {
+        if (this.isPlaying) {
+          // User-initiated pause or programmatic pause
+          this.eventEmitter.emit('pause');
+        }
+      };
+      this.audioElement.onended = () => {
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.eventEmitter.emit('end');
+      };
+      this.audioElement.onerror = (err) => {
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.eventEmitter.emit('error', err);
+      };
+    }
+  }
+
+  public async play(url: string) {
+    this.ensureAudioElement();
+    // If playing something else, stop first
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement.currentTime = 0;
+    }
+    this.isPlaying = true;
+    this.isPaused = false;
+    this.currentUrl = url;
+    this.audioElement!.src = url;
+    try {
+      await this.audioElement!.play();
+      // 'start' event fires via onplay
+    } catch (err) {
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.eventEmitter.emit('error', err);
+    }
+  }
+
+  public stop() {
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement.currentTime = 0;
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.eventEmitter.emit('end');
+    }
+  }
+
+  public pause() {
+    if (this.audioElement && this.isPlaying) {
+      this.audioElement.pause();
+      this.isPaused = true;
+      this.isPlaying = false;
+      // Emit 'pause' only; not 'end'
+      this.eventEmitter.emit('pause');
+    }
+  }
+
+  public resume() {
+    if (this.audioElement && this.isPaused) {
+      this.isPaused = false;
+      this.isPlaying = true;
+      this.audioElement.play().catch((err) => {
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.eventEmitter.emit('error', err);
+      });
+      // 'start' will emit via onplay
+    }
+  }
+
+  public on(event: 'start' | 'pause' | 'end' | 'error', handler: (...args: any[]) => void) {
+    this.eventEmitter.on(event, handler);
+  }
+
+  public off(event: 'start' | 'pause' | 'end' | 'error', handler: (...args: any[]) => void) {
+    this.eventEmitter.off(event, handler);
+  }
+
+  public getIsPlaying() {
+    return this.isPlaying;
+  }
+
+  public getIsPaused() {
+    return this.isPaused;
+  }
+
+  public getCurrentUrl() {
+    return this.currentUrl;
+  }
+}
+
+export default AudioManager;
 
 export const useAudioManager = (): AudioManagerHook => {
   const [isRecording, setIsRecording] = useState(false);

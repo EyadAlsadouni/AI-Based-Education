@@ -10,7 +10,8 @@ export interface RealtimeSession {
   isStreamComplete: boolean;
   isPlaybackDrained: boolean;
   currentTranscript: string;
-  lastResponse: string;
+  lastResponse: string; // full text from model
+  visibleResponse: string; // text revealed to UI in sync with audio
   error: string | null;
   connect: (userId: number, sessionId: string) => Promise<void>;
   disconnect: () => void;
@@ -39,6 +40,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const [isPlaybackDrained, setIsPlaybackDrained] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState('');
   const [lastResponse, setLastResponse] = useState('');
+  const [visibleResponse, setVisibleResponse] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPausedByUser, setIsPausedByUser] = useState(false);
 
@@ -55,6 +57,11 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const stoppedUntilNextResponseRef = useRef(false);
   const lastCancelAtRef = useRef<number>(0);
   const hasActiveResponseRef = useRef(false);
+  // Text streaming synchronization
+  const pendingTextRef = useRef('');
+  const revealTimerRef = useRef<number | null>(null);
+  const lastRevealTsRef = useRef<number>(0);
+  const charsPerSecondRef = useRef<number>(18); // conservative rate for readable sync
   
   // Removed complex paused buffer tracking; we rely on AudioContext suspend/resume
 
@@ -280,16 +287,63 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           break;
         }
 
-        case 'response.text.delta': {
-          // accumulate assistant text for chat mode
+        case 'response.text.delta':
+        case 'response.output_text.delta': {
           const delta = message.delta || '';
-          setLastResponse(prev => (prev || '') + delta);
+          if (delta) {
+            setLastResponse(prev => (prev || '') + delta);
+            pendingTextRef.current += delta;
+          }
+          break;
+        }
+        case 'response.delta': {
+          // Generic catcher for proxy formats
+          const d: any = message.delta;
+          let deltaText = '';
+          if (typeof d === 'string') {
+            deltaText = d;
+          } else if (d) {
+            if (typeof d.text === 'string') deltaText += d.text;
+            if (typeof d.output_text === 'string') deltaText += d.output_text;
+            if (Array.isArray(d.content)) {
+              deltaText += d.content.map((c: any) => c?.text || c?.output_text || '').join('');
+            }
+          }
+          if (deltaText) {
+            setLastResponse(prev => (prev || '') + deltaText);
+            pendingTextRef.current += deltaText;
+          }
           break;
         }
 
-        case 'response.text.done': {
-          setLastResponse(message.text || '');
+        case 'response.text.done':
+        case 'response.output_text.done': {
+          const finalText = message.text || message.output_text || lastResponse || '';
+          setLastResponse(finalText);
+          if (finalText && finalText.length > (lastResponse || '').length) {
+            pendingTextRef.current += finalText.slice((lastResponse || '').length);
+          }
           // Do not mark finished here; wait for playback drain
+          break;
+        }
+
+        case 'response.audio_transcript.delta': {
+          const delta = message.delta || message.transcript_delta || '';
+          if (delta) {
+            setLastResponse(prev => (prev || '') + delta);
+            pendingTextRef.current += delta;
+          }
+          break;
+        }
+
+        case 'response.audio_transcript.done': {
+          const finalText = message.transcript || message.text || '';
+          if (finalText) {
+            setLastResponse(prev => finalText.length > (prev || '').length ? finalText : prev);
+            if (finalText.length > (lastResponse || '').length) {
+              pendingTextRef.current += finalText.slice((lastResponse || '').length);
+            }
+          }
           break;
         }
 
@@ -442,7 +496,50 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     (source as any).__startTime = startTime;
 
     source.start();
+
+    // Start or continue the reveal loop while audio is playing
+    if (revealTimerRef.current == null) {
+      lastRevealTsRef.current = performance.now();
+      revealTimerRef.current = window.setInterval(() => {
+        if (!isPlayingAudioRef.current || pausedRef.current || stoppedUntilNextResponseRef.current) {
+          lastRevealTsRef.current = performance.now();
+          return;
+        }
+        const now = performance.now();
+        const dt = (now - lastRevealTsRef.current) / 1000;
+        lastRevealTsRef.current = now;
+        const cps = charsPerSecondRef.current;
+        if (pendingTextRef.current.length > 0 && cps > 0) {
+          const take = Math.max(1, Math.floor(cps * dt));
+          const slice = pendingTextRef.current.slice(0, take);
+          pendingTextRef.current = pendingTextRef.current.slice(slice.length);
+          setVisibleResponse(prev => prev + slice);
+        }
+        // If playback ended and nothing left to reveal, stop the timer
+        if (!isPlayingAudioRef.current && pendingTextRef.current.length === 0) {
+          if (revealTimerRef.current) {
+            clearInterval(revealTimerRef.current);
+            revealTimerRef.current = null;
+          }
+        }
+      }, 50);
+    }
   }, [maybeMarkPlaybackDrained]);
+
+  // When streaming is complete and playback is drained, flush any remaining text
+  useEffect(() => {
+    if (isStreamComplete && isPlaybackDrained) {
+      // Reveal everything we have
+      if (pendingTextRef.current.length > 0 || visibleResponse !== lastResponse) {
+        setVisibleResponse(lastResponse);
+        pendingTextRef.current = '';
+      }
+      if (revealTimerRef.current) {
+        clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+    }
+  }, [isStreamComplete, isPlaybackDrained, lastResponse, visibleResponse]);
 
   // Handle context requests from the model
   const handleContextRequest = useCallback(async (args: any) => {
@@ -576,6 +673,8 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     try {
       // Clear previous response text for new conversation and reset streaming/drain state
       setLastResponse('');
+      setVisibleResponse('');
+      pendingTextRef.current = '';
       setIsPausedByUser(false); // Reset pause state for new request
       pausedRef.current = false;
       streamCompleteRef.current = false;
@@ -623,6 +722,13 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       setIsPausedByUser(false); // Reset pause state when stopping
       isPausedByUserRef.current = false;
       pausedRef.current = false;
+      // Stop reveal loop and clear text buffer
+      if (revealTimerRef.current) {
+        clearInterval(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+      pendingTextRef.current = '';
+      setVisibleResponse(prev => prev); // no-op to keep last shown
 
       // Cancel current response
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -705,6 +811,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     setIsPlaybackDrained(false);
     setCurrentTranscript('');
     setLastResponse('');
+    setVisibleResponse('');
   }, []);
 
   // Clear error
@@ -728,6 +835,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     isPlaybackDrained,
     currentTranscript,
     lastResponse,
+    visibleResponse,
     error,
     connect,
     disconnect,

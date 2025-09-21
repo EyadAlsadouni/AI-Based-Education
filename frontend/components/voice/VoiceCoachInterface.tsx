@@ -178,8 +178,8 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   useEffect(() => {
     const id = activeAssistantIdRef.current;
     if (!id) return;
-    setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: realtimeSession.lastResponse } : m)));
-  }, [realtimeSession.lastResponse]);
+    setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: realtimeSession.visibleResponse } : m)));
+  }, [realtimeSession.visibleResponse]);
 
   // Robust pause/resume logic for card playback
   const handleCardSelect = async (card: VoiceCard) => {
@@ -740,14 +740,14 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                               {m.status === 'interrupted' && 'Interrupted'}
                               {m.status === 'error' && 'Error'}
                             </div>
-                            {/* Response bubble - only show if there's text */}
-                            {m.text && (
-                              <div className="bg-white rounded-2xl px-4 py-3 max-w-[70%] shadow border text-sm">
-                                <div className="whitespace-pre-wrap leading-6">
-                                  {m.text}
-                                </div>
+                            {/* Assistant response bubble (always render to avoid flicker) */}
+                            <div className="bg-white rounded-2xl px-4 py-3 max-w-[70%] shadow border text-sm">
+                              <div className="whitespace-pre-wrap leading-6 min-h-[1rem] font-semibold">
+                                {m.text && m.text.length > 0
+                                  ? m.text
+                                  : (['processing','playing','paused'].includes(m.status) ? '…' : '')}
                               </div>
-                            )}
+                            </div>
                           </div>
                         </div>
                       </>

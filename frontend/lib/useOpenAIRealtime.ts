@@ -52,6 +52,9 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const pausedRef = useRef(false);
   const streamCompleteRef = useRef(false);
   const playbackDrainedRef = useRef(false);
+  const stoppedUntilNextResponseRef = useRef(false);
+  const lastCancelAtRef = useRef<number>(0);
+  const hasActiveResponseRef = useRef(false);
   
   // Removed complex paused buffer tracking; we rely on AudioContext suspend/resume
 
@@ -237,12 +240,19 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           break;
 
         case 'response.created':
+          stoppedUntilNextResponseRef.current = false;
+          hasActiveResponseRef.current = true;
           setIsProcessing(true);
           break;
 
         case 'response.audio.delta':
           // Queue audio chunks for playback
           if (message.delta) {
+            // If we've issued a stop and are waiting for the next response, ignore any stray deltas
+            if (stoppedUntilNextResponseRef.current) {
+              // console.log('[delta] Ignored because stoppedUntilNextResponseRef is true');
+              return;
+            }
             // If user intentionally paused, do NOT auto-resume the context.
             if (
               audioContextRef.current &&
@@ -266,6 +276,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           // Some stacks emit a single completed event
           streamCompleteRef.current = true;
           setIsStreamComplete(true);
+          hasActiveResponseRef.current = false;
           break;
         }
 
@@ -298,6 +309,14 @@ export const useOpenAIRealtime = (): RealtimeSession => {
                               errorDetails?.code || 
                               JSON.stringify(errorDetails) || 
                               'Unknown API error';
+          // Treat cancellation-without-active-response as benign
+          const lower = String(errorMessage || '').toLowerCase();
+          const isBenignCancel = lower.includes('cancellation failed') || lower.includes('no active response');
+          if (isBenignCancel) {
+            console.warn('Realtime cancel benign error suppressed:', errorMessage);
+            hasActiveResponseRef.current = false;
+            break;
+          }
           console.error('Realtime API error details:', {
             type: message.type,
             error: errorDetails,
@@ -607,9 +626,18 @@ export const useOpenAIRealtime = (): RealtimeSession => {
 
       // Cancel current response
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: 'response.cancel'
-        }));
+        stoppedUntilNextResponseRef.current = true;
+        lastCancelAtRef.current = Date.now();
+        // Only send cancel if we believe a response is active
+        if (hasActiveResponseRef.current) {
+          try {
+            wsRef.current.send(JSON.stringify({ type: 'response.cancel' }));
+          } catch (sendErr) {
+            console.error('[bargeIn] response.cancel send failed:', sendErr);
+          }
+        }
+        // Regardless, mark no active response to avoid repeated cancels
+        hasActiveResponseRef.current = false;
       }
 
       setIsProcessing(false);

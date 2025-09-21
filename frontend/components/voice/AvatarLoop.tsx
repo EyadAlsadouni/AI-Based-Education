@@ -23,7 +23,6 @@ export const AvatarLoop = forwardRef<AvatarLoopRef, AvatarLoopProps>(
     useImperativeHandle(ref, () => ({
       play: () => {
         if (videoRef.current && !isPlayingRef.current) {
-          videoRef.current.currentTime = 0;
           videoRef.current.play().catch(err => {
             console.error('Failed to play avatar video:', err);
             onError?.('Failed to play avatar animation');
@@ -82,7 +81,6 @@ export const AvatarLoop = forwardRef<AvatarLoopRef, AvatarLoopProps>(
         // Start playing with ≤120ms delay
         requestAnimationFrame(() => {
           if (videoRef.current) {
-            videoRef.current.currentTime = 0;
             videoRef.current.play().catch(err => {
               console.error('Failed to start avatar video:', err);
             });

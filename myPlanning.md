@@ -70,3 +70,17 @@ Validation:
 - Chat UI shows no ⏸ ▶ ⏹ buttons.
 - Card playback buttons remain unaffected.
 
+### 7) Chat click-to-pause/resume with shared stop [TODO]
+Goal: Mirror card UX for chat answers without touching card logic.
+
+Tasks:
+- 7.1 Make assistant message bubble clickable to toggle pause/resume [TODO]
+- 7.2 Keep 'paused' sticky in status mapping for active message [TODO]
+- 7.3 Red stop overlay stops chat playback if chat is active [TODO]
+- 7.4 Ensure new question interrupts previous turn via `bargeIn()` [TODO]
+
+Validation:
+- Clicking active question pauses/resumes TTS, labels update accordingly.
+- Stop button stops the active chat answer.
+- Asking a new question interrupts any previous answer immediately.
+

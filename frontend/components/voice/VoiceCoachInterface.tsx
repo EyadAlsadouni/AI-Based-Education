@@ -53,6 +53,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   const realtimeSession = useOpenAIRealtime();
   const avatarRef = useRef<AvatarLoopRef>(null);
   const audioManager = AudioManager.getInstance();
+  const activeUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     initializeVoiceCoach();
@@ -154,18 +155,17 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     setMessages(prev => prev.map(m => {
       if (m.role !== 'assistant' || m.id !== id) return m;
 
-      if (realtimeSession.isPlaying) return { ...m, status: 'playing' };
-      if (realtimeSession.isProcessing) return { ...m, status: 'processing' };
+      // Preserve paused even if streaming/processing continues
+      if ((m as any).status === 'paused') return m;
 
-      // keep paused status sticky
-      if (m.status === 'paused') return m;
+      if (realtimeSession.isPlaying) return { ...m, status: 'playing' } as any;
+      if (realtimeSession.isProcessing) return { ...m, status: 'processing' } as any;
 
-      // finish only when both are true AND not paused
-      if (realtimeSession.isStreamComplete &&
-          realtimeSession.isPlaybackDrained) {
-        return { ...m, status: 'finished' };
+      // Finish only when both streaming complete AND playback drained
+      if (realtimeSession.isStreamComplete && realtimeSession.isPlaybackDrained) {
+        return { ...m, status: 'finished' } as any;
       }
-      return m;
+      return m as any;
     }));
   }, [
     realtimeSession.isProcessing,
@@ -266,6 +266,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     // Append user message
     const userMsg: ChatMsg = { id: `u_${Date.now()}_${Math.random().toString(36).slice(2)}`, role: 'user', text, createdAt: Date.now() };
     setMessages(prev => [...prev, userMsg]);
+    activeUserIdRef.current = userMsg.id;
 
     // Create assistant placeholder
     const asstId = `a_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -276,6 +277,42 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     // Send to realtime
     realtimeSession.sendText(text);
     setTextInput('');
+  };
+
+  // Toggle pause/resume by clicking the active user question bubble
+  const toggleActiveQuestion = (userMessageId: string) => {
+    if (activeUserIdRef.current !== userMessageId) return;
+    const asstId = activeAssistantIdRef.current;
+    if (!asstId) return;
+    setMessages(prev => prev.map(m => {
+      if (m.role === 'assistant' && m.id === asstId) {
+        if ((m as any).status === 'paused') {
+          console.log('[UI] Question clicked - resume');
+          realtimeSession.resumeOutput();
+          avatarRef.current?.play();
+          return { ...(m as any), status: 'playing' } as any;
+        }
+        // Treat processing/playing as pausable playback
+        if (['playing', 'processing'].includes((m as any).status as any)) {
+          console.log('[UI] Question clicked - pause');
+          realtimeSession.pauseOutput();
+          avatarRef.current?.pause();
+          return { ...(m as any), status: 'paused' } as any;
+        }
+      }
+      return m as any;
+    }));
+  };
+
+  // Stop active chat answer via red overlay button
+  const stopActiveChat = () => {
+    const asstId = activeAssistantIdRef.current;
+    if (!asstId) return;
+    console.log('[UI] STOP clicked - stopping active chat answer');
+    realtimeSession.bargeIn();
+    setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === asstId ? { ...(m as any), status: 'stopped' } as any : m as any)));
+    activeAssistantIdRef.current = null;
+    avatarRef.current?.pause();
   };
 
   const requestMicrophonePermission = async () => {
@@ -475,10 +512,23 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                   isPlaying={realtimeSession.isPlaying || isPlayingCard}
                   onError={(error) => setError(error)}
                 />
-                {/* Stop button overlay when audio is playing or paused */}
-                {(isPlayingCard || isPausedCard) && (
+                {/* Stop button overlay when audio is playing or paused (cards or chat) */}
+                {(() => {
+                  const activeAssistantId = activeAssistantIdRef.current;
+                  const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
+                  const showStop = isPlayingCard || isPausedCard || realtimeSession.isPlaying || isChatPaused;
+                  return showStop;
+                })() && (
                   <button
-                    onClick={handleStopAudio}
+                    onClick={() => {
+                      const activeAssistantId = activeAssistantIdRef.current;
+                      const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
+                      if (isPlayingCard || isPausedCard) {
+                        handleStopAudio();
+                      } else if (realtimeSession.isPlaying || isChatPaused) {
+                        stopActiveChat();
+                      }
+                    }}
                     className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 cursor-pointer transition-colors shadow-lg"
                     title="Stop Audio"
                   >
@@ -653,7 +703,11 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                   <div key={m.id}>
                     {m.role === 'user' ? (
                       <div className="flex justify-end mb-2">
-                        <div className="bg-blue-600 text-white rounded-2xl px-4 py-3 max-w-[80%] text-sm shadow">
+                        <div
+                          className={`bg-blue-600 text-white rounded-2xl px-4 py-3 max-w-[80%] text-sm shadow ${activeUserIdRef.current === m.id && activeAssistantIdRef.current ? 'cursor-pointer ring-1 ring-blue-300' : ''}`}
+                          onClick={() => toggleActiveQuestion(m.id)}
+                          title={activeUserIdRef.current === m.id && activeAssistantIdRef.current ? 'Click to pause/resume' : undefined}
+                        >
                           {m.text}
                         </div>
                       </div>

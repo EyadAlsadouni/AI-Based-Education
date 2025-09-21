@@ -53,11 +53,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const streamCompleteRef = useRef(false);
   const playbackDrainedRef = useRef(false);
   
-  // NEW: Track if we had an active source when we paused
-  const hadActiveSourceWhenPausedRef = useRef(false);
-  // NEW: Track position in current buffer when paused
-  const pausedAtTimeRef = useRef<number>(0);
-  const pausedBufferRef = useRef<AudioBuffer | null>(null);
+  // Removed complex paused buffer tracking; we rely on AudioContext suspend/resume
 
   // Initialize audio context
   const initAudioContext = useCallback(async () => {
@@ -244,7 +240,6 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           setIsProcessing(true);
           break;
 
-        case 'response.output_audio.delta':
         case 'response.audio.delta':
           // Queue audio chunks for playback
           if (message.delta) {
@@ -360,28 +355,20 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     const noActiveSource = !currentSourceRef.current;
     const streamComplete = streamCompleteRef.current;
     const isPaused = pausedRef.current;
-    const hasUnfinishedBusiness = hadActiveSourceWhenPausedRef.current || pausedBufferRef.current;
-
-    console.log('[maybeMarkPlaybackDrained] Checking drain conditions:', {
-      streamComplete,
-      noQueue,
-      noActiveSource,
-      isPaused,
-      hasUnfinishedBusiness
-    });
+    
+    // console.log('[maybeMarkPlaybackDrained] Checking drain conditions:', { streamComplete, noQueue, noActiveSource, isPaused });
 
     // Only declare drained when:
     // - stream finished,
     // - no audio queued,
     // - no source currently playing,
     // - we are NOT paused,
-    // - AND we don't have unfinished business from a pause
-    if (streamComplete && noQueue && noActiveSource && !isPaused && !hasUnfinishedBusiness) {
+    if (streamComplete && noQueue && noActiveSource && !isPaused) {
       playbackDrainedRef.current = true;
       setIsPlaybackDrained(true);
       setIsProcessing(false);
       setIsPlaying(false);
-      console.log('[maybeMarkPlaybackDrained] Marked as drained');
+      // console.log('[maybeMarkPlaybackDrained] Marked as drained');
     }
   }, []);
 
@@ -389,42 +376,12 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const playNextAudioChunk = useCallback(() => {
     // If paused, do not consume the queue
     if (pausedRef.current || audioContextRef.current?.state === 'suspended') {
-      console.log('[playNextAudioChunk] Skipping - paused or suspended');
+      // console.log('[playNextAudioChunk] Skipping - paused or suspended');
       return;
     }
 
-    // Check if we have a paused buffer to resume first
-    if (pausedBufferRef.current && pausedAtTimeRef.current > 0) {
-      console.log('[playNextAudioChunk] Resuming paused buffer from', pausedAtTimeRef.current);
-      const buffer = pausedBufferRef.current;
-      const startTime = pausedAtTimeRef.current;
-      
-      // Clear the paused buffer tracking
-      pausedBufferRef.current = null;
-      pausedAtTimeRef.current = 0;
-      hadActiveSourceWhenPausedRef.current = false;
-      
-      // Play the remainder of the paused buffer
-      isPlayingAudioRef.current = true;
-      setIsPlaying(true);
-
-      const source = audioContextRef.current!.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audioContextRef.current!.destination);
-      currentSourceRef.current = source;
-      
-      const remainingDuration = buffer.duration - startTime;
-      
-      source.onended = () => {
-        console.log('[playNextAudioChunk] Paused buffer finished');
-        currentSourceRef.current = null;
-        maybeMarkPlaybackDrained();
-        playNextAudioChunk();
-      };
-
-      source.start(0, startTime, remainingDuration);
-      return;
-    }
+    // If we already have an active source, avoid starting another
+    if (currentSourceRef.current) return;
 
     if (audioQueueRef.current.length === 0) {
       isPlayingAudioRef.current = false;
@@ -450,14 +407,14 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     const startTime = audioContextRef.current.currentTime;
     
     source.onended = () => {
-      console.log('[playNextAudioChunk] Buffer ended');
+      // console.log('[playNextAudioChunk] Buffer ended');
       // Only process the end if we're not paused
       if (!pausedRef.current) {
         currentSourceRef.current = null;
         maybeMarkPlaybackDrained();
         playNextAudioChunk();
       } else {
-        console.log('[playNextAudioChunk] Ended while paused - not processing');
+        // console.log('[playNextAudioChunk] Ended while paused - not processing');
       }
     };
 
@@ -602,9 +559,6 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       setLastResponse('');
       setIsPausedByUser(false); // Reset pause state for new request
       pausedRef.current = false;
-      hadActiveSourceWhenPausedRef.current = false;
-      pausedBufferRef.current = null;
-      pausedAtTimeRef.current = 0;
       streamCompleteRef.current = false;
       playbackDrainedRef.current = false;
       setIsStreamComplete(false);
@@ -650,9 +604,6 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       setIsPausedByUser(false); // Reset pause state when stopping
       isPausedByUserRef.current = false;
       pausedRef.current = false;
-      hadActiveSourceWhenPausedRef.current = false;
-      pausedBufferRef.current = null;
-      pausedAtTimeRef.current = 0;
 
       // Cancel current response
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -670,59 +621,30 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   }, []);
 
   const pauseOutput = useCallback(() => {
-    console.log('[pauseOutput] Starting pause');
+    // console.log('[pauseOutput] Starting pause');
     if (audioContextRef.current?.state === 'running') {
       pausedRef.current = true;
-      
-      // Track if we have an active source and save its state
-      if (currentSourceRef.current) {
-        hadActiveSourceWhenPausedRef.current = true;
-        const source = currentSourceRef.current as any;
-        
-        // Try to calculate the elapsed time if possible
-        if (source.__buffer && source.__startTime && audioContextRef.current) {
-          const elapsed = audioContextRef.current.currentTime - source.__startTime;
-          pausedBufferRef.current = source.__buffer;
-          pausedAtTimeRef.current = Math.min(elapsed, source.__buffer.duration);
-          console.log('[pauseOutput] Saved paused position:', pausedAtTimeRef.current);
-        } else {
-          // If we can't determine position, mark that we had an active source
-          hadActiveSourceWhenPausedRef.current = true;
-        }
-        
-        // Stop the current source
-        try {
-          currentSourceRef.current.stop();
-        } catch (e) {
-          console.log('[pauseOutput] Error stopping source:', e);
-        }
-        currentSourceRef.current = null;
-      } else if (audioQueueRef.current.length > 0) {
-        // We have queued audio but no active source - still mark as having unfinished business
-        hadActiveSourceWhenPausedRef.current = true;
-      }
-      
       audioContextRef.current.suspend();
       setIsPlaying(false);
       setIsPausedByUser(true);
       isPausedByUserRef.current = true;
-      console.log('[pauseOutput] Pause complete');
+      // console.log('[pauseOutput] Pause complete');
     }
   }, []);
 
   const resumeOutput = useCallback(() => {
-    console.log('[resumeOutput] Starting resume');
+    // console.log('[resumeOutput] Starting resume');
     if (audioContextRef.current?.state === 'suspended') {
       pausedRef.current = false;
       isPausedByUserRef.current = false;
       setIsPausedByUser(false);
       
       audioContextRef.current.resume().then(() => {
-        console.log('[resumeOutput] Context resumed, checking for audio to play');
-        
-        // Always try to play next chunk when resuming
-        // playNextAudioChunk will handle resuming from saved position if needed
-        playNextAudioChunk();
+        // console.log('[resumeOutput] Context resumed, checking for audio to play');
+        // Only start consuming the queue if nothing is currently playing
+        if (!currentSourceRef.current && audioQueueRef.current.length > 0) {
+          playNextAudioChunk();
+        }
       });
     }
   }, [playNextAudioChunk]);

@@ -42,4 +42,31 @@ Validation:
 ### 4) Noise/Buzz Mitigation [PENDING]
 - Ensure only one audio graph, stop unused streams, throttle animations with rAF, pause on hidden tab
 
+### 5) Chat Controls & Stream vs Playback Gating [DONE]
+Goal: Pause ONLY pauses playback, Play resumes from paused or restarts after Stop, Stop cancels turn. Prevent premature "Finished".
+
+Tasks:
+- 5.1 Add stream/playback state to realtime hook: `isStreamComplete`, `isPlaybackDrained` [DONE]
+- 5.2 Track refs: `streamCompleteRef`, `playbackDrainedRef`; reset on connect/new response [DONE]
+- 5.3 Handle events: set stream complete on `response.audio.done`/`response.completed` only (no finish) [DONE]
+- 5.4 Make `playNextAudioChunk` drain-aware; mark finished only when queue empty AND stream complete [DONE]
+- 5.5 Keep `pauseOutput` local (suspend context), do not cancel; `resumeOutput` resumes [DONE]
+- 5.6 UI finish rule: mark assistant message Finished only when both `isStreamComplete && isPlaybackDrained` [DONE]
+
+Validation:
+- Pause keeps status Paused even if streaming finishes; Play resumes from same position.
+- Stop interrupts via `bargeIn()`, new question interrupts old turn cleanly.
+- No premature "Finished" when paused; no duplicate audio.
+
+### 6) Remove chat pause/play/stop controls [IN PROGRESS]
+Goal: Remove only the chat box control buttons and their handlers; keep card controls intact.
+
+Tasks:
+- 6.1 Remove Pause/Play/Stop buttons from chat UI in `frontend/components/voice/VoiceCoachInterface.tsx` [TODO]
+- 6.2 Delete chat-only handlers: `pauseAssistant`, `resumeAssistant`, `stopAssistant`, `handlePlayClickedForMessage` [TODO]
+- 6.3 Ensure no references remain; lint file and fix any issues [TODO]
+
+Validation:
+- Chat UI shows no ⏸ ▶ ⏹ buttons.
+- Card playback buttons remain unaffected.
 

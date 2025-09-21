@@ -14,6 +14,17 @@ interface VoiceCoachInterfaceProps {
   userId: number;
 }
 
+type ChatMsg =
+  | { id: string; role: 'user'; text: string; createdAt: number }
+  | {
+      id: string;
+      role: 'assistant';
+      text?: string;
+      audioUrl?: string;
+      status: 'processing' | 'playing' | 'paused' | 'finished' | 'stopped' | 'interrupted' | 'error';
+      createdAt: number;
+    };
+
 export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId }) => {
   const [sessionId, setSessionId] = useState<string>('');
   const [profile, setProfile] = useState<VoiceProfile | null>(null);
@@ -33,6 +44,11 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [isPlayingCard, setIsPlayingCard] = useState(false);
   const [isPausedCard, setIsPausedCard] = useState(false);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const activeAssistantIdRef = useRef<string | null>(null);
+  const chatRef = useRef<HTMLDivElement | null>(null);
+  const chatWindowRef = useRef<HTMLDivElement | null>(null);
+  const draggingRef = useRef<{ active: boolean; offsetX: number; offsetY: number }>({ active: false, offsetX: 0, offsetY: 0 });
 
   const realtimeSession = useOpenAIRealtime();
   const avatarRef = useRef<AvatarLoopRef>(null);
@@ -121,6 +137,50 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     };
   }, [audioManager]);
 
+  // Auto-scroll chat to newest message when near bottom
+  useEffect(() => {
+    const el = chatRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
+  // Reflect realtime playback state into current assistant message status
+  useEffect(() => {
+    const id = activeAssistantIdRef.current;
+    if (!id) return;
+    setMessages(prev => prev.map(m => {
+      if (m.role !== 'assistant' || m.id !== id) return m;
+
+      if (realtimeSession.isPlaying) return { ...m, status: 'playing' };
+      if (realtimeSession.isProcessing) return { ...m, status: 'processing' };
+
+      // keep paused status sticky
+      if (m.status === 'paused') return m;
+
+      // finish only when both are true AND not paused
+      if (realtimeSession.isStreamComplete &&
+          realtimeSession.isPlaybackDrained) {
+        return { ...m, status: 'finished' };
+      }
+      return m;
+    }));
+  }, [
+    realtimeSession.isProcessing,
+    realtimeSession.isPlaying,
+    realtimeSession.isStreamComplete,
+    realtimeSession.isPlaybackDrained
+  ]);
+
+  // Update assistant text as it streams (chat mode only)
+  useEffect(() => {
+    const id = activeAssistantIdRef.current;
+    if (!id) return;
+    setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: realtimeSession.lastResponse } : m)));
+  }, [realtimeSession.lastResponse]);
+
   // Robust pause/resume logic for card playback
   const handleCardSelect = async (card: VoiceCard) => {
     try {
@@ -188,10 +248,34 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
 
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (textInput.trim()) {
-      realtimeSession.sendText(textInput.trim());
-      setTextInput('');
+    const text = textInput.trim();
+    if (!text) return;
+
+    // Single-turn policy: interrupt any active assistant turn
+    const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && ['processing', 'playing', 'paused'].includes((m as any).status));
+    if (lastAssistant) {
+      realtimeSession.bargeIn();
+      audioManager.stop();
+      setMessages(prev => prev.map(m => (m.id === lastAssistant.id ? { ...(m as any), status: 'interrupted' } : m)));
+      activeAssistantIdRef.current = null;
     }
+
+    // Clear any previous response text to avoid mixing
+    realtimeSession.clearError();
+    
+    // Append user message
+    const userMsg: ChatMsg = { id: `u_${Date.now()}_${Math.random().toString(36).slice(2)}`, role: 'user', text, createdAt: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+
+    // Create assistant placeholder
+    const asstId = `a_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    activeAssistantIdRef.current = asstId;
+    const assistantMsg: ChatMsg = { id: asstId, role: 'assistant', status: 'processing', createdAt: Date.now() } as ChatMsg;
+    setMessages(prev => [...prev, assistantMsg]);
+
+    // Send to realtime
+    realtimeSession.sendText(text);
+    setTextInput('');
   };
 
   const requestMicrophonePermission = async () => {
@@ -223,6 +307,74 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
       }, 120);
     }
   }, [realtimeSession.isPlaying]);
+
+  // Draggable + resizable chatbox (persist within session)
+  useEffect(() => {
+    const savedPos = sessionStorage.getItem('chatbox_pos');
+    const savedSize = sessionStorage.getItem('chatbox_size');
+    const box = chatWindowRef.current;
+    if (!box) return;
+    if (savedPos) {
+      const { x, y } = JSON.parse(savedPos);
+      box.style.left = `${x}px`;
+      box.style.top = `${y}px`;
+    }
+    if (savedSize) {
+      const { w, h } = JSON.parse(savedSize);
+      box.style.width = `${w}px`;
+      box.style.height = `${h}px`;
+    }
+  }, [showChatInterface]);
+
+  const beginDrag = (e: React.MouseEvent) => {
+    const box = chatWindowRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    draggingRef.current = { active: true, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current.active) return;
+      const box = chatWindowRef.current;
+      if (!box) return;
+      const x = Math.max(0, Math.min(window.innerWidth - 100, e.clientX - draggingRef.current.offsetX));
+      const y = Math.max(0, Math.min(window.innerHeight - 100, e.clientY - draggingRef.current.offsetY));
+      box.style.left = `${x}px`;
+      box.style.top = `${y}px`;
+    };
+    const onUp = () => {
+      if (!draggingRef.current.active) return;
+      draggingRef.current.active = false;
+      const box = chatWindowRef.current;
+      if (box) {
+        const rect = box.getBoundingClientRect();
+        sessionStorage.setItem('chatbox_pos', JSON.stringify({ x: rect.left, y: rect.top }));
+        sessionStorage.setItem('chatbox_size', JSON.stringify({ w: rect.width, h: rect.height }));
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  
+
+  const retryAssistant = (text: string) => {
+    // Retry by re-sending same text
+    setTextInput(text);
+    // simulate submit
+    setTimeout(() => {
+      const form = document.querySelector('#vc-chat-form') as HTMLFormElement | null;
+      form?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    }, 0);
+  };
+
+  
 
   if (isInitializing) {
     return (
@@ -478,81 +630,107 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
 
         {/* Chat Interface - Collapsible */}
         {showChatInterface && (
-          <div className="fixed bottom-4 right-4 w-96 bg-white rounded-xl shadow-xl border z-50">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-800">
+          <div
+            ref={chatWindowRef}
+            className="fixed bg-white rounded-xl shadow-xl border z-50"
+            style={{ bottom: undefined as any, right: undefined as any, width: 420, height: 520, left: 24, top: window.innerHeight - 560, resize: 'both', overflow: 'hidden' }}
+          >
+            <div className="flex items-center justify-between p-3 border-b cursor-move select-none bg-white/60 backdrop-blur" onMouseDown={beginDrag}>
+              <h3 className="text-xl font-semibold text-gray-800">
                 Chat with Voice Coach
               </h3>
               <button
                 onClick={() => setShowChatInterface(false)}
-                className="text-gray-500 hover:text-gray-700 cursor-pointer"
+                className="text-gray-500 hover:text-gray-700 cursor-pointer rounded-full w-8 h-8 flex items-center justify-center hover:bg-gray-100"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="h-64 overflow-y-auto bg-gray-50 p-4">
-              <div className="space-y-3">
-                {realtimeSession.currentTranscript && (
-                  <div className="flex justify-end">
-                    <div className="bg-blue-600 text-white rounded-lg px-3 py-2 max-w-[80%] text-sm">
-                      {realtimeSession.currentTranscript}
-                    </div>
-                  </div>
-                )}
-
-                {realtimeSession.lastResponse && (
-                  <div className="flex justify-start">
-                    <div className="bg-white rounded-lg px-3 py-2 max-w-[80%] shadow-sm border text-sm">
-                      {realtimeSession.lastResponse}
-                    </div>
-                  </div>
-                )}
-
-                {realtimeSession.isProcessing && (
-                  <div className="flex justify-start">
-                    <div className="bg-white rounded-lg px-3 py-2 shadow-sm border">
-                      <div className="flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                        <span className="text-sm text-gray-600">Thinking...</span>
+            <div ref={chatRef} className="h-[calc(100%-124px)] overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4">
+              <div className="space-y-4">
+                {messages.map((m) => (
+                  <div key={m.id}>
+                    {m.role === 'user' ? (
+                      <div className="flex justify-end mb-2">
+                        <div className="bg-blue-600 text-white rounded-2xl px-4 py-3 max-w-[80%] text-sm shadow">
+                          {m.text}
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        {/* Controls removed per request: Pause/Play/Stop */}
+                        <div className="flex justify-end mb-2">
+                          <div className="flex items-center gap-2 text-base text-gray-700">
+                            {(m.status === 'interrupted' || m.status === 'error') && (
+                              <button
+                                className="px-2 py-1 rounded-full border w-8 h-8 flex items-center justify-center hover:bg-gray-50"
+                                title="Retry"
+                                onClick={() => retryAssistant(messages.find(mm => mm.role==='user' && mm.createdAt < m.createdAt)?.text || '')}
+                              >
+                                ↻
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {/* Assistant response with status on left */}
+                        <div className="flex justify-start">
+                          <div className="flex items-start gap-3">
+                            {/* Status on the left */}
+                            <div className="text-xs text-gray-500 mt-1 min-w-[80px]">
+                              {m.status === 'processing' && 'Processing…'}
+                              {m.status === 'playing' && 'Playing…'}
+                              {m.status === 'paused' && 'Paused'}
+                              {m.status === 'finished' && 'Finished'}
+                              {m.status === 'stopped' && 'Stopped'}
+                              {m.status === 'interrupted' && 'Interrupted'}
+                              {m.status === 'error' && 'Error'}
+                            </div>
+                            {/* Response bubble - only show if there's text */}
+                            {m.text && (
+                              <div className="bg-white rounded-2xl px-4 py-3 max-w-[70%] shadow border text-sm">
+                                <div className="whitespace-pre-wrap leading-6">
+                                  {m.text}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
             </div>
 
-            <form onSubmit={handleTextSubmit} className="p-4 border-t">
+            <form id="vc-chat-form" onSubmit={handleTextSubmit} className="p-4 border-t bg-white/70">
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   placeholder="Type your question..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   disabled={realtimeSession.isProcessing}
                 />
                 <Button
                   type="submit"
                   disabled={!textInput.trim() || realtimeSession.isProcessing}
                   size="sm"
-                  className="cursor-pointer hover:bg-blue-700"
+                  className="cursor-pointer hover:bg-blue-700 rounded-xl px-4"
                 >
                   Send
                 </Button>
               </div>
+              {/* bottom spacing */}
+              <div className="mt-2" />
             </form>
           </div>
         )}
 
 
 
-        {/* Live Transcript Display */}
-        {realtimeSession.currentTranscript && (
-          <div className="mt-6 bg-black/80 text-white rounded-lg p-4 text-center">
-            <p className="text-lg">{realtimeSession.currentTranscript}</p>
-          </div>
-        )}
+        {/* Removed bottom echo bar per requirements */}
       </div>
     </div>
   );

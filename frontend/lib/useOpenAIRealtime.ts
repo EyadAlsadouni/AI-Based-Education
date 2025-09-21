@@ -7,6 +7,8 @@ export interface RealtimeSession {
   isListening: boolean;
   isProcessing: boolean;
   isPlaying: boolean;
+  isStreamComplete: boolean;
+  isPlaybackDrained: boolean;
   currentTranscript: string;
   lastResponse: string;
   error: string | null;
@@ -17,6 +19,8 @@ export interface RealtimeSession {
   sendText: (text: string) => void;
   bargeIn: () => void;
   clearError: () => void;
+  pauseOutput: () => void;
+  resumeOutput: () => void;
 }
 
 interface RealtimeMessage {
@@ -31,15 +35,29 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isStreamComplete, setIsStreamComplete] = useState(false);
+  const [isPlaybackDrained, setIsPlaybackDrained] = useState(false);
   const [currentTranscript, setCurrentTranscript] = useState('');
   const [lastResponse, setLastResponse] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isPausedByUser, setIsPausedByUser] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingAudioRef = useRef(false);
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const isPausedByUserRef = useRef(false);
+  const pausedRef = useRef(false);
+  const streamCompleteRef = useRef(false);
+  const playbackDrainedRef = useRef(false);
+  
+  // NEW: Track if we had an active source when we paused
+  const hadActiveSourceWhenPausedRef = useRef(false);
+  // NEW: Track position in current buffer when paused
+  const pausedAtTimeRef = useRef<number>(0);
+  const pausedBufferRef = useRef<AudioBuffer | null>(null);
 
   // Initialize audio context
   const initAudioContext = useCallback(async () => {
@@ -95,6 +113,11 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       wsRef.current.onopen = () => {
         console.log('WebSocket connected successfully');
         setIsConnected(true);
+        // Reset stream/playback state on new connection
+        streamCompleteRef.current = false;
+        playbackDrainedRef.current = false;
+        setIsStreamComplete(false);
+        setIsPlaybackDrained(false);
         
         // Wait a bit before sending session configuration
         setTimeout(() => {
@@ -105,12 +128,13 @@ export const useOpenAIRealtime = (): RealtimeSession => {
               type: 'session.update',
               session: {
                 modalities: ['text', 'audio'],
-                instructions: `You are a helpful health coach for a patient education platform. 
-                  Provide warm, supportive responses in a 6th-grade reading level. 
+                instructions: `You are a helpful health coach for a patient education platform.
+                  Provide warm, supportive responses in a 6th-grade reading level.
                   Keep responses brief (30-60 seconds of speech).
                   Always ground your responses in the user's dashboard and profile data when available.
                   Never provide medical diagnosis or dosing advice.
-                  If asked about emergencies, immediately recommend contacting emergency services.`,
+                  If asked about emergencies, immediately recommend contacting emergency services.
+                  Always respond in English only.`,
                 voice: 'alloy',
                 input_audio_format: 'pcm16',
                 output_audio_format: 'pcm16',
@@ -220,24 +244,48 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           setIsProcessing(true);
           break;
 
+        case 'response.output_audio.delta':
         case 'response.audio.delta':
           // Queue audio chunks for playback
           if (message.delta) {
+            // If user intentionally paused, do NOT auto-resume the context.
+            if (
+              audioContextRef.current &&
+              audioContextRef.current.state === 'suspended' &&
+              !isPausedByUserRef.current
+            ) {
+              audioContextRef.current.resume().catch(() => {});
+            }
             queueAudioChunk(message.delta);
           }
           break;
 
-        case 'response.audio.done':
-          setIsProcessing(false);
+        case 'response.audio.done': {
+          // Streaming finished. Do not mark finished until playback drains
+          streamCompleteRef.current = true;
+          setIsStreamComplete(true);
           break;
+        }
 
-        case 'response.text.delta':
-          setLastResponse(prev => prev + (message.delta || ''));
+        case 'response.completed': {
+          // Some stacks emit a single completed event
+          streamCompleteRef.current = true;
+          setIsStreamComplete(true);
           break;
+        }
 
-        case 'response.text.done':
+        case 'response.text.delta': {
+          // accumulate assistant text for chat mode
+          const delta = message.delta || '';
+          setLastResponse(prev => (prev || '') + delta);
+          break;
+        }
+
+        case 'response.text.done': {
           setLastResponse(message.text || '');
+          // Do not mark finished here; wait for playback drain
           break;
+        }
 
         case 'response.function_call_arguments.delta':
           // Handle function call for RAG context
@@ -298,7 +346,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       
       audioQueueRef.current.push(audioBuffer);
       
-      if (!isPlayingAudioRef.current) {
+      if (!isPlayingAudioRef.current && !pausedRef.current) {
         playNextAudioChunk();
       }
     } catch (error) {
@@ -307,16 +355,89 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     }
   }, []);
 
+  const maybeMarkPlaybackDrained = useCallback(() => {
+    const noQueue = audioQueueRef.current.length === 0;
+    const noActiveSource = !currentSourceRef.current;
+    const streamComplete = streamCompleteRef.current;
+    const isPaused = pausedRef.current;
+    const hasUnfinishedBusiness = hadActiveSourceWhenPausedRef.current || pausedBufferRef.current;
+
+    console.log('[maybeMarkPlaybackDrained] Checking drain conditions:', {
+      streamComplete,
+      noQueue,
+      noActiveSource,
+      isPaused,
+      hasUnfinishedBusiness
+    });
+
+    // Only declare drained when:
+    // - stream finished,
+    // - no audio queued,
+    // - no source currently playing,
+    // - we are NOT paused,
+    // - AND we don't have unfinished business from a pause
+    if (streamComplete && noQueue && noActiveSource && !isPaused && !hasUnfinishedBusiness) {
+      playbackDrainedRef.current = true;
+      setIsPlaybackDrained(true);
+      setIsProcessing(false);
+      setIsPlaying(false);
+      console.log('[maybeMarkPlaybackDrained] Marked as drained');
+    }
+  }, []);
+
   // Play audio chunks sequentially
   const playNextAudioChunk = useCallback(() => {
+    // If paused, do not consume the queue
+    if (pausedRef.current || audioContextRef.current?.state === 'suspended') {
+      console.log('[playNextAudioChunk] Skipping - paused or suspended');
+      return;
+    }
+
+    // Check if we have a paused buffer to resume first
+    if (pausedBufferRef.current && pausedAtTimeRef.current > 0) {
+      console.log('[playNextAudioChunk] Resuming paused buffer from', pausedAtTimeRef.current);
+      const buffer = pausedBufferRef.current;
+      const startTime = pausedAtTimeRef.current;
+      
+      // Clear the paused buffer tracking
+      pausedBufferRef.current = null;
+      pausedAtTimeRef.current = 0;
+      hadActiveSourceWhenPausedRef.current = false;
+      
+      // Play the remainder of the paused buffer
+      isPlayingAudioRef.current = true;
+      setIsPlaying(true);
+
+      const source = audioContextRef.current!.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContextRef.current!.destination);
+      currentSourceRef.current = source;
+      
+      const remainingDuration = buffer.duration - startTime;
+      
+      source.onended = () => {
+        console.log('[playNextAudioChunk] Paused buffer finished');
+        currentSourceRef.current = null;
+        maybeMarkPlaybackDrained();
+        playNextAudioChunk();
+      };
+
+      source.start(0, startTime, remainingDuration);
+      return;
+    }
+
     if (audioQueueRef.current.length === 0) {
       isPlayingAudioRef.current = false;
       setIsPlaying(false);
+      maybeMarkPlaybackDrained();
       return;
     }
 
     const audioBuffer = audioQueueRef.current.shift();
-    if (!audioBuffer || !audioContextRef.current) return;
+    if (!audioBuffer || !audioContextRef.current) {
+      maybeMarkPlaybackDrained();
+      return;
+    }
 
     isPlayingAudioRef.current = true;
     setIsPlaying(true);
@@ -324,13 +445,28 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioContextRef.current.destination);
+    currentSourceRef.current = source;
+    
+    const startTime = audioContextRef.current.currentTime;
     
     source.onended = () => {
-      playNextAudioChunk();
+      console.log('[playNextAudioChunk] Buffer ended');
+      // Only process the end if we're not paused
+      if (!pausedRef.current) {
+        currentSourceRef.current = null;
+        maybeMarkPlaybackDrained();
+        playNextAudioChunk();
+      } else {
+        console.log('[playNextAudioChunk] Ended while paused - not processing');
+      }
     };
 
+    // Store buffer reference in case we need to pause
+    (source as any).__buffer = audioBuffer;
+    (source as any).__startTime = startTime;
+
     source.start();
-  }, []);
+  }, [maybeMarkPlaybackDrained]);
 
   // Handle context requests from the model
   const handleContextRequest = useCallback(async (args: any) => {
@@ -462,6 +598,18 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     }
 
     try {
+      // Clear previous response text for new conversation and reset streaming/drain state
+      setLastResponse('');
+      setIsPausedByUser(false); // Reset pause state for new request
+      pausedRef.current = false;
+      hadActiveSourceWhenPausedRef.current = false;
+      pausedBufferRef.current = null;
+      pausedAtTimeRef.current = 0;
+      streamCompleteRef.current = false;
+      playbackDrainedRef.current = false;
+      setIsStreamComplete(false);
+      setIsPlaybackDrained(false);
+      
       wsRef.current.send(JSON.stringify({
         type: 'conversation.item.create',
         item: {
@@ -494,7 +642,17 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       // Stop current audio playback
       audioQueueRef.current = [];
       isPlayingAudioRef.current = false;
+      if (currentSourceRef.current) {
+        try { currentSourceRef.current.stop(); } catch {}
+        currentSourceRef.current = null;
+      }
       setIsPlaying(false);
+      setIsPausedByUser(false); // Reset pause state when stopping
+      isPausedByUserRef.current = false;
+      pausedRef.current = false;
+      hadActiveSourceWhenPausedRef.current = false;
+      pausedBufferRef.current = null;
+      pausedAtTimeRef.current = 0;
 
       // Cancel current response
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -510,6 +668,64 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       setIsPlaying(false);
     }
   }, []);
+
+  const pauseOutput = useCallback(() => {
+    console.log('[pauseOutput] Starting pause');
+    if (audioContextRef.current?.state === 'running') {
+      pausedRef.current = true;
+      
+      // Track if we have an active source and save its state
+      if (currentSourceRef.current) {
+        hadActiveSourceWhenPausedRef.current = true;
+        const source = currentSourceRef.current as any;
+        
+        // Try to calculate the elapsed time if possible
+        if (source.__buffer && source.__startTime && audioContextRef.current) {
+          const elapsed = audioContextRef.current.currentTime - source.__startTime;
+          pausedBufferRef.current = source.__buffer;
+          pausedAtTimeRef.current = Math.min(elapsed, source.__buffer.duration);
+          console.log('[pauseOutput] Saved paused position:', pausedAtTimeRef.current);
+        } else {
+          // If we can't determine position, mark that we had an active source
+          hadActiveSourceWhenPausedRef.current = true;
+        }
+        
+        // Stop the current source
+        try {
+          currentSourceRef.current.stop();
+        } catch (e) {
+          console.log('[pauseOutput] Error stopping source:', e);
+        }
+        currentSourceRef.current = null;
+      } else if (audioQueueRef.current.length > 0) {
+        // We have queued audio but no active source - still mark as having unfinished business
+        hadActiveSourceWhenPausedRef.current = true;
+      }
+      
+      audioContextRef.current.suspend();
+      setIsPlaying(false);
+      setIsPausedByUser(true);
+      isPausedByUserRef.current = true;
+      console.log('[pauseOutput] Pause complete');
+    }
+  }, []);
+
+  const resumeOutput = useCallback(() => {
+    console.log('[resumeOutput] Starting resume');
+    if (audioContextRef.current?.state === 'suspended') {
+      pausedRef.current = false;
+      isPausedByUserRef.current = false;
+      setIsPausedByUser(false);
+      
+      audioContextRef.current.resume().then(() => {
+        console.log('[resumeOutput] Context resumed, checking for audio to play');
+        
+        // Always try to play next chunk when resuming
+        // playNextAudioChunk will handle resuming from saved position if needed
+        playNextAudioChunk();
+      });
+    }
+  }, [playNextAudioChunk]);
 
   // Disconnect
   const disconnect = useCallback(() => {
@@ -535,6 +751,8 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     setIsListening(false);
     setIsProcessing(false);
     setIsPlaying(false);
+    setIsStreamComplete(false);
+    setIsPlaybackDrained(false);
     setCurrentTranscript('');
     setLastResponse('');
   }, []);
@@ -556,6 +774,8 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     isListening,
     isProcessing,
     isPlaying,
+    isStreamComplete,
+    isPlaybackDrained,
     currentTranscript,
     lastResponse,
     error,
@@ -565,6 +785,8 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     stopListening,
     sendText,
     bargeIn,
-    clearError
+    clearError,
+    pauseOutput,
+    resumeOutput
   };
 };

@@ -9,6 +9,7 @@ import { VoicePreferences, VoicePreferences as VoicePreferencesType } from './Vo
 import { voiceApi } from '../../lib/api';
 import { VoiceCard, VoiceProfile } from '../../types';
 import AudioManager from '../../lib/useAudioManager';
+import { BoldTextRenderer } from './BoldTextRenderer';
 
 interface VoiceCoachInterfaceProps {
   userId: number;
@@ -744,7 +745,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                             <div className="bg-white rounded-2xl px-4 py-3 max-w-[70%] shadow border text-sm">
                               <div className="whitespace-pre-wrap leading-6 min-h-[1rem] font-semibold">
                                 {m.text && m.text.length > 0
-                                  ? m.text
+                                  ? <BoldTextRenderer text={m.text} />
                                   : (['processing','playing','paused'].includes(m.status) ? '…' : '')}
                               </div>
                             </div>

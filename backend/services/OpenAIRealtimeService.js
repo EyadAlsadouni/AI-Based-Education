@@ -195,6 +195,50 @@ Guidelines:
     }
   }
 
+  // Generate simple card summary without "Hey [Name]" prefix for dashboard
+  async generateSimpleCardSummary(cardContent, userProfile) {
+    try {
+      const prompt = `
+Create a clear, educational summary of this health card content for ${userProfile.full_name || 'the user'}.
+
+Card Content: ${JSON.stringify(cardContent)}
+
+User Context: ${userProfile.condition || 'General health'}, Age: ${userProfile.age || 'Not specified'}
+
+Guidelines:
+- Use 6th-grade reading level
+- Be informative and supportive
+- Keep to 60-120 seconds of speech (about 150-300 words)
+- Include one specific actionable step
+- Personalize based on user context
+- No medical diagnosis or dosing advice
+- Start directly with the content, no greeting like "Hey [Name]"
+- Use a consistent, professional tone throughout
+`;
+
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful health educator creating clear, consistent summaries for patients. Be informative, supportive, and educational. Always use the same professional tone throughout.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 400,
+        temperature: 0.5 // Lower temperature for more consistent voice
+      });
+
+      return response.choices[0].message.content;
+    } catch (error) {
+      console.error('Error generating simple card summary:', error);
+      throw new Error('Failed to generate card summary');
+    }
+  }
+
   // Generate TTS audio using gpt-4o-mini-tts
   async generateTTS(text, voiceId = null, speed = 1.0) {
     try {

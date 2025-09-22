@@ -3,12 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '../ui/Button';
-import { aiApi, userApi, handleApiError } from '../../lib/api';
+import { aiApi, userApi, handleApiError, voiceApi } from '../../lib/api';
 import { formStorage, format, error as errorUtils } from '../../lib/utils';
 import { DASHBOARD_CARDS } from '../../lib/constants';
 import { DashboardContent, UserSession } from '../../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import AudioManager from '../../lib/useAudioManager';
 
 
 
@@ -201,6 +203,45 @@ export const DashboardComponent: React.FC = () => {
   const [selectedCard, setSelectedCard] = useState<{ title: string; content: string; icon: string } | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [error, setError] = useState<string>('');
+  
+  // Voice reading states
+  const [playingCardId, setPlayingCardId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [dashboardAudioManager] = useState(() => new AudioManager());
+
+  // Audio event handlers for voice reading
+  useEffect(() => {
+    const handleStart = () => {
+      setIsPlaying(true);
+      setIsPaused(false);
+      console.log('[Dashboard AudioManager] start');
+    };
+    const handleEnd = () => {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setPlayingCardId(null);
+      console.log('[Dashboard AudioManager] end');
+    };
+    const handleError = (err: any) => {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setPlayingCardId(null);
+      setError('Failed to play audio');
+      console.log('[Dashboard AudioManager] error', err);
+    };
+    
+    dashboardAudioManager.on('start', handleStart);
+    dashboardAudioManager.on('end', handleEnd);
+    dashboardAudioManager.on('error', handleError);
+    
+    return () => {
+      dashboardAudioManager.off('start', handleStart);
+      dashboardAudioManager.off('end', handleEnd);
+      dashboardAudioManager.off('error', handleError);
+    };
+  }, [dashboardAudioManager]);
 
   // Check if user has completed all steps
   useEffect(() => {
@@ -310,6 +351,61 @@ export const DashboardComponent: React.FC = () => {
       content,
       icon: card.icon
     });
+  };
+
+  const handleVoiceRead = async (cardId: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent card click
+    
+    if (!userId || !dashboardContent) return;
+
+    try {
+      // If clicking the currently playing card
+      if (playingCardId === cardId) {
+        if (dashboardAudioManager.getIsPlaying()) {
+          // Pause if currently playing
+          dashboardAudioManager.pause();
+          setIsPaused(true);
+          setIsPlaying(false);
+          return;
+        } else if (isPaused) {
+          // Resume if currently paused
+          dashboardAudioManager.resume();
+          setIsPaused(false);
+          setIsPlaying(true);
+          return;
+        }
+      }
+      
+      // If a different card, stop current audio and play new
+      dashboardAudioManager.stop();
+      setIsPlaying(false);
+      setIsPaused(false);
+      setIsGenerating(true);
+      setPlayingCardId(cardId);
+      
+      // Play card summary using new dashboard API
+      const summaryResponse = await voiceApi.generateDashboardCardAudio(userId, cardId);
+      if (summaryResponse.audio_url) {
+        setIsGenerating(false);
+        await dashboardAudioManager.play(summaryResponse.audio_url);
+        setIsPlaying(true);
+        setIsPaused(false);
+      }
+    } catch (error) {
+      console.error('Error playing card summary:', error);
+      setError('Failed to play card summary');
+      setIsPlaying(false);
+      setIsPaused(false);
+      setIsGenerating(false);
+      setPlayingCardId(null);
+    }
+  };
+
+  const handleStopAudio = () => {
+    dashboardAudioManager.stop();
+    setIsPlaying(false);
+    setIsPaused(false);
+    setPlayingCardId(null);
   };
 
   const handleStartOver = () => {
@@ -509,10 +605,15 @@ export const DashboardComponent: React.FC = () => {
                         break;
                     }
 
+                    const isCurrentlyPlaying = playingCardId === card.id;
+                    const isCardPlaying = isCurrentlyPlaying && isPlaying;
+                    const isCardPaused = isCurrentlyPlaying && isPaused;
+                    const isCardGenerating = isCurrentlyPlaying && isGenerating;
+
                     return (
                       <div
                         key={card.id}
-                        className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-gray-50 hover:bg-white hover:scale-[1.02]"
+                        className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-gray-50 hover:bg-white hover:scale-[1.02] relative"
                         onClick={() => handleCardClick(card.id)}
                       >
                         <div className="flex items-start space-x-3">
@@ -522,11 +623,54 @@ export const DashboardComponent: React.FC = () => {
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-gray-900 mb-1">{card.title}</h3>
                             <p className="text-sm text-gray-600 mb-2">{card.description}</p>
-                            <div className="text-xs text-blue-600 font-medium">
-                              Click to explore →
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs text-blue-600 font-medium">
+                                Click to explore →
+                              </div>
+                              {isCardGenerating && (
+                                <div className="text-xs text-blue-600 font-medium">
+                                  Generating audio...
+                                </div>
+                              )}
+                              {isCardPlaying && (
+                                <div className="text-xs text-green-600 font-medium">
+                                  Playing...
+                                </div>
+                              )}
+                              {isCardPaused && (
+                                <div className="text-xs text-amber-600 font-medium">
+                                  Paused
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
+                        
+                        {/* Microphone Icon */}
+                        <button
+                          onClick={(e) => handleVoiceRead(card.id, e)}
+                          disabled={isCardGenerating}
+                          className={`absolute top-3 right-3 p-2 rounded-full transition-all hover:scale-110 cursor-pointer ${
+                            isCardGenerating
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : isCardPlaying
+                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                              : isCardPaused
+                              ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
+                              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                          }`}
+                          title={isCardGenerating ? 'Generating audio...' : isCardPlaying ? 'Pause audio' : isCardPaused ? 'Resume audio' : 'Play audio'}
+                        >
+                          {isCardGenerating ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                          ) : isCardPlaying ? (
+                            <VolumeX className="h-4 w-4" />
+                          ) : isCardPaused ? (
+                            <Volume2 className="h-4 w-4" />
+                          ) : (
+                            <Mic className="h-4 w-4" />
+                          )}
+                        </button>
                       </div>
                     );
                   })}
@@ -753,6 +897,27 @@ export const DashboardComponent: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Audio Control Bar */}
+      {isPlaying && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-50">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-gray-700">
+                Playing: {DASHBOARD_CARDS.find(c => c.id === playingCardId)?.title}
+              </span>
+            </div>
+            <button
+              onClick={handleStopAudio}
+              className="p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
+              title="Stop audio"
+            >
+              <VolumeX className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (

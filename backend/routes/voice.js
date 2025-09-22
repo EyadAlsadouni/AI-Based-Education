@@ -87,6 +87,165 @@ router.post('/context', async (req, res) => {
   }
 });
 
+// POST /api/voice/dashboard-card-audio - Generate card audio for dashboard (direct content reading)
+router.post('/dashboard-card-audio', async (req, res) => {
+  try {
+    const { user_id, card_id } = req.body;
+
+    if (!user_id || !card_id) {
+      return res.status(400).json({ error: 'User ID and card ID are required' });
+    }
+
+    // Get user profile and card content
+    const dashboardQuery = `
+      SELECT us.ai_response, us.condition_selected, u.full_name, u.age 
+      FROM user_sessions us 
+      JOIN users u ON us.user_id = u.id 
+      WHERE us.user_id = ?
+    `;
+
+    db.get(dashboardQuery, [user_id], async (err, row) => {
+      if (err) {
+        console.error('Error fetching user data:', err);
+        return res.status(500).json({ error: 'Failed to fetch user data' });
+      }
+
+      if (!row || !row.ai_response) {
+        return res.status(404).json({ error: 'User data not found' });
+      }
+
+      try {
+        const dashboard = JSON.parse(row.ai_response);
+        let cardContent = '';
+        
+        // Get card content based on card_id
+        switch (card_id) {
+          case 'diagnosis':
+            cardContent = dashboard.diagnosis_basics || '';
+            break;
+          case 'nutrition':
+            cardContent = dashboard.nutrition_carbs || '';
+            break;
+          case 'workout':
+            cardContent = dashboard.workout || '';
+            break;
+          case 'daily_plan':
+            cardContent = dashboard.daily_plan || '';
+            break;
+          default:
+            return res.status(400).json({ error: 'Invalid card ID' });
+        }
+
+        if (!cardContent) {
+          return res.status(404).json({ error: 'Card content not found' });
+        }
+
+        // Clean content for audio reading (remove references, video links, etc.)
+        const cleanedContent = cleanContentForAudio(cardContent);
+
+        // Create cache key for this content
+        const contentHash = require('crypto').createHash('md5').update(cleanedContent).digest('hex');
+        const cacheKey = `dashboard_${user_id}_${card_id}_${contentHash}`;
+
+        // Check cache first
+        db.get(`
+          SELECT audio_url, audio_duration_ms, script_text 
+          FROM tts_cache 
+          WHERE cache_key = ? AND expires_at > datetime('now')
+        `, [cacheKey], async (err, cached) => {
+          if (err) {
+            console.error('Cache lookup error:', err);
+            return res.status(500).json({ error: 'Cache lookup failed' });
+          }
+
+          if (cached) {
+            // Return cached result immediately
+            console.log('Returning cached audio for dashboard card');
+            return res.json({
+              success: true,
+              script_text: cached.script_text,
+              audio_url: cached.audio_url,
+              duration_ms: cached.audio_duration_ms,
+              cached: true
+            });
+          }
+
+          try {
+            // Generate TTS using gpt-4o-mini-tts with consistent voice
+            console.log('Generating new TTS for dashboard card...');
+            const ttsResponse = await realtimeService.generateTTS(cleanedContent, 'alloy', 1.0);
+            const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+            const audioBase64 = audioBuffer.toString('base64');
+            const audioUrl = `data:audio/mp3;base64,${audioBase64}`;
+
+            // Estimate duration
+            const wordCount = cleanedContent.split(' ').length;
+            const estimatedDuration = Math.round((wordCount / 150) * 60 * 1000);
+
+            // Cache the result for 24 hours
+            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            db.run(`
+              INSERT OR REPLACE INTO tts_cache 
+              (cache_key, user_id, card_id, content_hash, voice_id, audio_url, audio_duration_ms, script_text, expires_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [cacheKey, user_id, card_id, contentHash, 'alloy', audioUrl, estimatedDuration, cleanedContent, expiresAt.toISOString()]);
+
+            res.json({
+              success: true,
+              script_text: cleanedContent,
+              audio_url: audioUrl,
+              duration_ms: estimatedDuration,
+              cached: false
+            });
+
+          } catch (ttsError) {
+            console.error('TTS generation error:', ttsError);
+            res.status(500).json({ error: 'Failed to generate audio' });
+          }
+        });
+
+      } catch (parseError) {
+        console.error('Error parsing dashboard content:', parseError);
+        res.status(500).json({ error: 'Invalid dashboard content' });
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in dashboard-card-audio:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+// Helper function to clean content for audio reading
+function cleanContentForAudio(content) {
+  if (!content) return '';
+  
+  let cleaned = content;
+  
+  // Remove references section and everything after it
+  const referencesIndex = cleaned.toLowerCase().indexOf('references:');
+  if (referencesIndex !== -1) {
+    cleaned = cleaned.substring(0, referencesIndex).trim();
+  }
+  
+  // Remove video links and references
+  cleaned = cleaned.replace(/\[(\d+)\]\s*[^\n]*/g, ''); // Remove [1], [2], etc.
+  cleaned = cleaned.replace(/https?:\/\/[^\s]+/g, ''); // Remove URLs
+  cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // Convert [text](url) to just text
+  
+  // Remove extra whitespace and clean up formatting
+  cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, '$1'); // Remove bold formatting
+  cleaned = cleaned.replace(/\*(.*?)\*/g, '$1'); // Remove italic formatting
+  cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n'); // Remove excessive line breaks
+  cleaned = cleaned.replace(/^\s+|\s+$/g, ''); // Trim start and end
+  
+  // Clean up any remaining artifacts
+  cleaned = cleaned.replace(/\s+/g, ' '); // Replace multiple spaces with single space
+  cleaned = cleaned.replace(/\n\s+/g, '\n'); // Remove leading spaces from lines
+  
+  return cleaned.trim();
+}
+
 // POST /api/voice/summarize-card-v2 - Generate card summary with gpt-4o-mini-tts
 router.post('/summarize-card-v2', async (req, res) => {
   try {

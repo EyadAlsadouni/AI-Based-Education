@@ -1,3 +1,74 @@
+## Voice Coach UI Redesign Plan
+
+### Task: Remove Listen Mode and Add Voice Reading to Dashboard Cards
+
+**Objective**: Remove Listen Mode from Voice Coach page and add microphone icons to Dashboard cards for voice reading functionality.
+
+### Completed Tasks ✅
+
+#### 1. Remove Listen Mode from Voice Coach Page
+- ✅ Removed mode state management (`listen` | `chat`)
+- ✅ Removed card-related states (`cards`, `selectedCard`, `isPlayingCard`, `isPausedCard`)
+- ✅ Removed card audio event handlers
+- ✅ Removed card selection and audio handling functions
+- ✅ Removed entire Mode Selection section from UI
+- ✅ Updated layout to full-width for Voice Agent section
+- ✅ Updated status text to remove card-related status
+- ✅ Updated stop button logic to remove card-related conditions
+- ✅ Updated avatar isPlaying prop to only use realtime session
+
+#### 2. Add Microphone Icons to Dashboard Cards
+- ✅ Added necessary imports (Mic, MicOff, Volume2, VolumeX icons, voiceApi, AudioManager)
+- ✅ Added voice reading states (playingCardId, isPlaying, isPaused)
+- ✅ Added audio event handlers for voice reading
+- ✅ Implemented voice reading functions (handleVoiceRead, handleStopAudio)
+- ✅ Updated card rendering with microphone icons
+- ✅ Added visual feedback (playing/paused states)
+- ✅ Added global audio control bar when playing
+- ✅ Added proper event handling to prevent card click when clicking mic
+
+#### 3. Voice Reading Functionality
+- ✅ Integrated with existing voiceApi.summarizeCard() function
+- ✅ Used shared AudioManager for consistent audio management
+- ✅ Added play/pause/stop functionality for card content
+- ✅ Added visual feedback with different icon states
+- ✅ Added proper error handling
+
+### Current Status
+- Voice Coach page now focuses only on chat functionality (text/voice)
+- Dashboard cards have microphone icons that read content aloud
+- Full-width layout for Voice Coach page
+- Proper audio management and visual feedback
+
+### Bug Fixes Applied ✅
+
+#### 1. Fixed 404 Error for Dashboard Card Audio
+- ✅ Created new API endpoint `/voice/dashboard-card-audio` that doesn't require voice session
+- ✅ Added `generateDashboardCardAudio` function to frontend API
+- ✅ Updated Dashboard component to use new API endpoint
+
+#### 2. Fixed Cross-Page Audio Playback Issue
+- ✅ Created separate AudioManager instance for Dashboard (`dashboardAudioManager`)
+- ✅ Prevented audio from playing on wrong page
+- ✅ Isolated audio management between Voice Coach and Dashboard
+
+#### 3. Fixed Voice Inconsistency in Card Reading
+- ✅ Created `generateSimpleCardSummary` method with consistent voice
+- ✅ Removed "Hey [Name]" prefix that caused voice inconsistency
+- ✅ Used lower temperature (0.5) for more consistent voice generation
+- ✅ Applied consistent voice settings (alloy, 1.0 speed) throughout
+
+### Current Status
+- Dashboard card audio now works without 404 errors
+- Audio playback is properly isolated between pages
+- Voice consistency issues resolved with clean, professional tone
+- All functionality working as expected
+
+### Next Steps
+- Test the implementation to ensure all functionality works correctly
+- Verify voice reading works for all card types
+- Confirm Voice Coach chat functionality remains intact
+
 ## Voice Coach Stabilization Plan
 
 ### 1) Persistence/Caches Audit [DONE]

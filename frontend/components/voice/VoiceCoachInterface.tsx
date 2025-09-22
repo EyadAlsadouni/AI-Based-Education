@@ -29,9 +29,8 @@ type ChatMsg =
 export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId }) => {
   const [sessionId, setSessionId] = useState<string>('');
   const [profile, setProfile] = useState<VoiceProfile | null>(null);
-  const [cards, setCards] = useState<VoiceCard[]>([]);
-  const [selectedCard, setSelectedCard] = useState<VoiceCard | null>(null);
-  const [mode, setMode] = useState<'listen' | 'chat'>('chat');
+  // Removed cards and selectedCard states - no longer needed for chat-only mode
+  // Removed mode state - Voice Coach is now chat-only
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [textInput, setTextInput] = useState('');
@@ -42,9 +41,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     playbackSpeed: 1.0
   });
   const [showChatInterface, setShowChatInterface] = useState(false);
-  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-  const [isPlayingCard, setIsPlayingCard] = useState(false);
-  const [isPausedCard, setIsPausedCard] = useState(false);
+  // Removed card audio states - no longer needed for chat-only mode
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const activeAssistantIdRef = useRef<string | null>(null);
   const chatRef = useRef<HTMLDivElement | null>(null);
@@ -72,16 +69,12 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
       console.log('Session created:', sessionResponse);
       setSessionId(sessionResponse.session_id);
 
-      // Step 2: Get profile and cards
-      console.log('Fetching profile and cards...');
-      const [profileResponse, cardsResponse] = await Promise.all([
-        voiceApi.getProfile(userId),
-        voiceApi.getCards(userId)
-      ]);
-      console.log('Profile and cards fetched successfully');
+      // Step 2: Get profile
+      console.log('Fetching profile...');
+      const profileResponse = await voiceApi.getProfile(userId);
+      console.log('Profile fetched successfully');
 
       setProfile(profileResponse.profile);
-      setCards(cardsResponse.cards);
 
       // Step 3: Connect to OpenAI Realtime API
       console.log('Connecting to OpenAI Realtime API...');
@@ -106,38 +99,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     }
   };
 
-  // Playback event logging and avatar sync
-  useEffect(() => {
-    const handleStart = () => {
-      setIsPlayingCard(true);
-      setIsPausedCard(false);
-      avatarRef.current?.play();
-      console.log('[AudioManager] start');
-    };
-    const handleEnd = () => {
-      setIsPlayingCard(false);
-      setIsPausedCard(false);
-      avatarRef.current?.pause();
-      setSelectedCard(null);
-      console.log('[AudioManager] end');
-    };
-    const handleError = (err: any) => {
-      setIsPlayingCard(false);
-      setIsPausedCard(false);
-      avatarRef.current?.pause();
-      setError('Failed to play audio');
-      setSelectedCard(null);
-      console.log('[AudioManager] error', err);
-    };
-    audioManager.on('start', handleStart);
-    audioManager.on('end', handleEnd);
-    audioManager.on('error', handleError);
-    return () => {
-      audioManager.off('start', handleStart);
-      audioManager.off('end', handleEnd);
-      audioManager.off('error', handleError);
-    };
-  }, [audioManager]);
+  // Removed card audio event handlers - no longer needed for chat-only mode
 
   // Auto-scroll chat to newest message when near bottom
   useEffect(() => {
@@ -182,62 +144,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: realtimeSession.visibleResponse } : m)));
   }, [realtimeSession.visibleResponse]);
 
-  // Robust pause/resume logic for card playback
-  const handleCardSelect = async (card: VoiceCard) => {
-    try {
-      // If clicking the currently selected card
-      if (selectedCard?.id === card.id) {
-        if (audioManager.getIsPlaying()) {
-          // Pause if currently playing
-          audioManager.pause();
-          setIsPausedCard(true);
-          setIsPlayingCard(false);
-          avatarRef.current?.pause();
-          return;
-        } else if (isPausedCard) {
-          // Resume if currently paused
-          audioManager.resume();
-          setIsPausedCard(false);
-          setIsPlayingCard(true);
-          avatarRef.current?.play();
-          return;
-        } else {
-          // If not playing or paused, do nothing (should not happen)
-          return;
-        }
-      }
-      // If a different card, stop current audio and play new
-      audioManager.stop();
-      setIsPlayingCard(false);
-      setIsPausedCard(false);
-      avatarRef.current?.pause();
-      setSelectedCard(card);
-      setMode('listen');
-      // Play card summary using new gpt-4o-mini-tts approach
-      const summaryResponse = await voiceApi.summarizeCard(userId, card.id);
-      if (summaryResponse.audio_url) {
-        // Wait for audioManager.play to resolve, then avatar will start via event
-        await audioManager.play(summaryResponse.audio_url);
-        setIsPlayingCard(true);
-        setIsPausedCard(false);
-      }
-    } catch (error) {
-      console.error('Error playing card summary:', error);
-      setError('Failed to play card summary');
-      setIsPlayingCard(false);
-      setIsPausedCard(false);
-      setSelectedCard(null);
-      avatarRef.current?.pause();
-    }
-  };
-
-  const handleStopAudio = () => {
-    audioManager.stop();
-    setIsPlayingCard(false);
-    setIsPausedCard(false);
-    setSelectedCard(null);
-    avatarRef.current?.pause();
-  };
+  // Removed card selection and audio handling functions - no longer needed for chat-only mode
 
   const handleMicToggle = () => {
     if (realtimeSession.isListening) {
@@ -500,33 +407,31 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
       </div>
 
       <div className="max-w-7xl mx-auto p-6">
-        {/* Main Content - Voice Agent and Mode Selection Side by Side */}
-        <div className="flex gap-6 justify-center mb-8">
+        {/* Main Content - Voice Agent Full Width */}
+        <div className="flex justify-center mb-8">
           {/* Voice Agent Section */}
-          <div className="bg-white rounded-xl shadow-lg p-12 max-w-2xl w-full">
+          <div className="bg-white rounded-xl shadow-lg p-12 max-w-4xl w-full">
             <div className="text-center">
               {/* Larger Square Avatar */}
               <div className="w-96 h-96 mx-auto mb-8 relative">
                 <AvatarLoop
                   ref={avatarRef}
                   className="w-full h-full"
-                  isPlaying={realtimeSession.isPlaying || isPlayingCard}
+                  isPlaying={realtimeSession.isPlaying}
                   onError={(error) => setError(error)}
                 />
-                {/* Stop button overlay when audio is playing or paused (cards or chat) */}
+                {/* Stop button overlay when audio is playing or paused (chat only) */}
                 {(() => {
                   const activeAssistantId = activeAssistantIdRef.current;
                   const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
-                  const showStop = isPlayingCard || isPausedCard || realtimeSession.isPlaying || isChatPaused;
+                  const showStop = realtimeSession.isPlaying || isChatPaused;
                   return showStop;
                 })() && (
                   <button
                     onClick={() => {
                       const activeAssistantId = activeAssistantIdRef.current;
                       const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
-                      if (isPlayingCard || isPausedCard) {
-                        handleStopAudio();
-                      } else if (realtimeSession.isPlaying || isChatPaused) {
+                      if (realtimeSession.isPlaying || isChatPaused) {
                         stopActiveChat();
                       }
                     }}
@@ -581,9 +486,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                   {realtimeSession.isListening && 'Listening...'}
                   {realtimeSession.isProcessing && 'Processing...'}
                   {realtimeSession.isPlaying && 'Speaking...'}
-                  {isPlayingCard && 'Playing card summary...'}
-                  {isPausedCard && 'Paused'}
-                  {!realtimeSession.isListening && !realtimeSession.isProcessing && !realtimeSession.isPlaying && !isPlayingCard && !isPausedCard &&
+                  {!realtimeSession.isListening && !realtimeSession.isProcessing && !realtimeSession.isPlaying &&
                     'Ready to chat'}
                 </p>
               </div>
@@ -597,84 +500,6 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                 <MessageCircle className="h-5 w-5" />
                 {showChatInterface ? 'Hide Chat' : 'Show Chat Interface'}
               </Button>
-            </div>
-          </div>
-
-          {/* Mode Selection Section - Vertical Layout */}
-          <div className="bg-white rounded-xl shadow-lg p-6 w-80">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Mode Selection</h3>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => setMode('listen')}
-                  className={`px-4 py-2 rounded text-sm font-medium transition-colors cursor-pointer hover:bg-gray-100 ${
-                    mode === 'listen'
-                      ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                      : 'bg-gray-50 text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  Listen Mode
-                </button>
-                <button
-                  onClick={() => setMode('chat')}
-                  className={`px-4 py-2 rounded text-sm font-medium transition-colors cursor-pointer hover:bg-gray-100 ${
-                    mode === 'chat'
-                      ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                      : 'bg-gray-50 text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  Chat Mode
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t pt-4">
-              {/* Cards Section for Listen Mode */}
-              {mode === 'listen' && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-4">Select a card to listen to educational content:</p>
-                  <div className="flex flex-col gap-3">
-                    {cards.map((card) => (
-                      <button
-                        key={card.id}
-                        onClick={() => handleCardSelect(card)}
-                        className={`p-3 rounded-lg border text-left transition-all cursor-pointer hover:shadow-md ${
-                          selectedCard?.id === card.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <h4 className="font-medium text-gray-800 text-sm">{card.title}</h4>
-                        <p className="text-xs text-gray-600 mt-1">
-                          ~{Math.round(card.duration_estimate / 1000)}s
-                          {selectedCard?.id === card.id && (
-                            <span className="ml-2 font-semibold">
-                              {isPlayingCard && (
-                                <span className="text-blue-600">Playing...</span>
-                              )}
-                              {isPausedCard && (
-                                <span className="text-amber-600">Paused</span>
-                              )}
-                            </span>
-                          )}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Chat Mode Information */}
-              {mode === 'chat' && (
-                <div className="text-center py-8">
-                  <p className="text-sm text-gray-600 mb-4">
-                    Use the microphone button to start a conversation with your Voice Coach.
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    You can also use the chat interface for text-based questions.
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>

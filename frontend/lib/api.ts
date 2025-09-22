@@ -145,6 +145,15 @@ export const voiceApi = {
     return response.data;
   },
 
+  // Generate dashboard card audio (no session required)
+  generateDashboardCardAudio: async (userId: number, cardId: string): Promise<TTSSummaryResponse> => {
+    const response = await api.post('/voice/dashboard-card-audio', { 
+      user_id: userId, 
+      card_id: cardId 
+    });
+    return response.data;
+  },
+
   // Get WebSocket URL for voice chat
   getWebSocketUrl: (): string => {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';

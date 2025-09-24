@@ -22,6 +22,7 @@ export interface RealtimeSession {
   clearError: () => void;
   pauseOutput: () => void;
   resumeOutput: () => void;
+  clearBuffers: () => void;
 }
 
 interface RealtimeMessage {
@@ -47,6 +48,9 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const processorRef = useRef<any>(null);
+  const listeningMsRef = useRef<any>(null);
+  const hasAudioFrameRef = useRef<any>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingAudioRef = useRef(false);
   const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -65,11 +69,14 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   
   // Removed complex paused buffer tracking; we rely on AudioContext suspend/resume
 
-  // Initialize audio context
+  // Initialize audio context with 16kHz sample rate
   const initAudioContext = useCallback(async () => {
     try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        // Force a 16kHz context so we don't have to resample later
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
+          sampleRate: 16000
+        });
       }
       
       if (audioContextRef.current.state === 'suspended') {
@@ -140,19 +147,21 @@ export const useOpenAIRealtime = (): RealtimeSession => {
                   Always ground your responses in the user's dashboard and profile data when available.
                   Never provide medical diagnosis or dosing advice.
                   If asked about emergencies, immediately recommend contacting emergency services.
-                  Always respond in English only.`,
+                  CRITICAL: Always respond in English only. Never use any other language.
+                  If the user speaks in another language, acknowledge it but respond in English.`,
                 voice: 'alloy',
                 input_audio_format: 'pcm16',
                 output_audio_format: 'pcm16',
                 input_audio_transcription: {
                   model: 'whisper-1'
                 },
-                turn_detection: {
-                  type: 'server_vad',
-                  threshold: 0.5,
-                  prefix_padding_ms: 300,
-                  silence_duration_ms: 500
-                },
+                // Disable automatic turn detection for manual push-to-talk control
+                // turn_detection: {
+                //   type: 'server_vad',
+                //   threshold: 0.5,
+                //   prefix_padding_ms: 300,
+                //   silence_duration_ms: 500
+                // },
                 tools: [
                   {
                     type: 'function',
@@ -233,13 +242,13 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           break;
 
         case 'input_audio_buffer.speech_started':
-          setIsListening(true);
-          setCurrentTranscript('');
+          // Ignore automatic speech detection - we use manual push-to-talk
+          console.log('Server detected speech start (ignored - using manual control)');
           break;
 
         case 'input_audio_buffer.speech_stopped':
-          setIsListening(false);
-          setIsProcessing(true);
+          // Ignore automatic speech detection - we use manual push-to-talk
+          console.log('Server detected speech stop (ignored - using manual control)');
           break;
 
         case 'conversation.item.input_audio_transcription.completed':
@@ -353,7 +362,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
 
         case 'response.function_call_arguments.done':
           if (message.name === 'get_user_context') {
-            handleContextRequest(message.arguments);
+            handleContextRequest(message.arguments, message.call_id);
           }
           break;
 
@@ -403,7 +412,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         audioData[i] = binaryString.charCodeAt(i);
       }
       
-      // Convert PCM16 data to AudioBuffer
+      // Convert PCM16 data to AudioBuffer - use 24kHz for output audio
       const audioBuffer = audioContextRef.current.createBuffer(1, audioData.length / 2, 24000);
       const channelData = audioBuffer.getChannelData(0);
       
@@ -542,7 +551,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   }, [isStreamComplete, isPlaybackDrained, lastResponse, visibleResponse]);
 
   // Handle context requests from the model
-  const handleContextRequest = useCallback(async (args: any) => {
+  const handleContextRequest = useCallback(async (args: any, callId?: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/voice/context`, {
         method: 'POST',
@@ -555,20 +564,60 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       const contextData = await response.json();
       
       // Send context back to the model
-      wsRef.current?.send(JSON.stringify({
-        type: 'conversation.item.create',
-        item: {
-          type: 'function_call_output',
-          call_id: args.call_id,
-          output: JSON.stringify(contextData)
-        }
-      }));
+      if (callId && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'conversation.item.create',
+          item: {
+            type: 'function_call_output',
+            call_id: callId,
+            output: JSON.stringify(contextData)
+          }
+        }));
+      }
     } catch (error) {
       console.error('Error fetching context:', error);
     }
   }, []);
 
-  // Start audio input
+  // Clear all buffers and reset state
+  const clearBuffers = useCallback(() => {
+    // Clear audio buffers
+    audioQueueRef.current = [];
+    if (currentSourceRef.current) {
+      try { 
+        currentSourceRef.current.stop(); 
+      } catch {} 
+      currentSourceRef.current = null;
+    }
+    
+    // Clear text buffers
+    setLastResponse('');
+    setVisibleResponse('');
+    pendingTextRef.current = '';
+    
+    // Reset state
+    setIsPausedByUser(false);
+    isPausedByUserRef.current = false;
+    pausedRef.current = false;
+    streamCompleteRef.current = false;
+    playbackDrainedRef.current = false;
+    setIsStreamComplete(false);
+    setIsPlaybackDrained(false);
+    isPlayingAudioRef.current = false;
+    setIsPlaying(false);
+    setIsProcessing(false);
+    
+    // Clear reveal timer
+    if (revealTimerRef.current) {
+      clearInterval(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    
+    // Clear error
+    setError(null);
+  }, []);
+
+  // Start audio input using AudioWorklet with ScriptProcessorNode fallback
   const startListening = useCallback(async () => {
     try {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -576,13 +625,13 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         return;
       }
 
-      if (!audioContextRef.current) {
-        await initAudioContext();
-      }
+      // Clear any previous buffers and reset state for new voice interaction
+      clearBuffers();
 
+      await initAudioContext();
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
-          sampleRate: 24000,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
@@ -590,76 +639,145 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         }
       });
 
-      // Use Web Audio API to process audio into PCM16 format
-      const source = audioContextRef.current!.createMediaStreamSource(stream);
-      const processor = audioContextRef.current!.createScriptProcessor(4096, 1, 1);
-      
-      processor.onaudioprocess = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          return;
+      const ctx = audioContextRef.current!;
+      let accumulatedMs = 0;
+      let hasAudioFrame = false;
+      let useWorklet = false;
+
+      try {
+        // Try AudioWorklet first
+        if (!(ctx as any).audioWorklet?.modules?.length) {
+          await ctx.audioWorklet.addModule('/audio/pcm16-worklet.js');
         }
 
-        const inputData = e.inputBuffer.getChannelData(0);
+        const src = ctx.createMediaStreamSource(stream);
+        const node = new (window as any).AudioWorkletNode(ctx, 'pcm16-worklet');
+
+        node.port.onmessage = (ev: MessageEvent<Uint8Array>) => {
+          const u8 = ev.data; // 20ms @16kHz mono pcm16
+          accumulatedMs += 20;
+          hasAudioFrame = true;
+
+          console.log(`Audio frame received: ${u8.byteLength} bytes, total ms: ${accumulatedMs}`);
+
+          // Base64 encode without copying repeatedly
+          let binary = '';
+          const len = u8.byteLength;
+          for (let i = 0; i < len; i++) binary += String.fromCharCode(u8[i]);
+          const base64 = btoa(binary);
+
+          wsRef.current?.send(JSON.stringify({
+            type: 'input_audio_buffer.append',
+            audio: base64
+          }));
+        };
+
+      src.connect(node);
+      (processorRef as any).current = { node, src, disconnect: () => { node.disconnect(); src.disconnect(); } };
+      useWorklet = true;
+      console.log('Using AudioWorklet for audio processing - MANUAL PUSH-TO-TALK MODE');
         
-        // Convert Float32Array to PCM16
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
+      } catch (workletError) {
+        console.warn('AudioWorklet failed, falling back to ScriptProcessorNode:', workletError);
         
-        // Convert to base64
-        const uint8Array = new Uint8Array(pcm16.buffer);
-        let binary = '';
-        for (let i = 0; i < uint8Array.length; i++) {
-          binary += String.fromCharCode(uint8Array[i]);
-        }
-        const base64Audio = btoa(binary);
+        // Fallback to ScriptProcessorNode
+        const src = ctx.createMediaStreamSource(stream);
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
         
-        // Send audio data
-        wsRef.current?.send(JSON.stringify({
-          type: 'input_audio_buffer.append',
-          audio: base64Audio
-        }));
-      };
+        processor.onaudioprocess = (e) => {
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            return;
+          }
 
-      source.connect(processor);
-      processor.connect(audioContextRef.current!.destination);
+          const inputData = e.inputBuffer.getChannelData(0);
+          accumulatedMs += (inputData.length / 16000) * 1000; // Convert samples to ms
+          hasAudioFrame = true;
 
-      // Store references for cleanup
-      (mediaRecorderRef as any).current = {
-        stream,
-        source,
-        processor,
-        disconnect: () => {
-          processor.disconnect();
-          source.disconnect();
-          stream.getTracks().forEach(track => track.stop());
-        }
-      };
+          console.log(`ScriptProcessor frame: ${inputData.length} samples, total ms: ${accumulatedMs}`);
+          
+          // Convert Float32Array to PCM16
+          const pcm16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          
+          // Convert to base64
+          const uint8Array = new Uint8Array(pcm16.buffer);
+          let binary = '';
+          for (let i = 0; i < uint8Array.length; i++) {
+            binary += String.fromCharCode(uint8Array[i]);
+          }
+          const base64Audio = btoa(binary);
+          
+          // Send audio data
+          wsRef.current?.send(JSON.stringify({
+            type: 'input_audio_buffer.append',
+            audio: base64Audio
+          }));
+        };
 
+        src.connect(processor);
+        processor.connect(ctx.destination);
+        (processorRef as any).current = { processor, src, disconnect: () => { processor.disconnect(); src.disconnect(); } };
+        useWorklet = false;
+        console.log('Using ScriptProcessorNode for audio processing - MANUAL PUSH-TO-TALK MODE');
+      }
+
+      // Keep refs so we can stop later
+      (mediaRecorderRef as any).current = stream;
       setIsListening(true);
-
+      
+      // Store ms and frame status so stopListening can check them
+      (listeningMsRef as any).current = () => accumulatedMs;
+      (hasAudioFrameRef as any).current = () => hasAudioFrame;
+      
     } catch (error) {
       console.error('Error starting audio input:', error);
       setError('Failed to access microphone. Please check permissions.');
     }
-  }, [initAudioContext]);
+  }, [initAudioContext, clearBuffers]);
 
-  // Stop audio input
+  // Stop audio input with proper buffer commit logic
   const stopListening = useCallback(() => {
-    if ((mediaRecorderRef as any).current && typeof (mediaRecorderRef as any).current.disconnect === 'function') {
-      (mediaRecorderRef as any).current.disconnect();
-      (mediaRecorderRef as any).current = null;
+    try {
+      // Stop nodes & tracks
+      const processor = (processorRef as any).current;
+      if (processor && typeof processor.disconnect === 'function') {
+        processor.disconnect();
+        (processorRef as any).current = null;
+      }
+      
+      const stream: MediaStream | undefined = (mediaRecorderRef as any).current;
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        (mediaRecorderRef as any).current = null;
+      }
+
+      // Ensure ≥100ms before commit
+      const gotMs = (listeningMsRef as any).current ? (listeningMsRef as any).current() : 0;
+      const hasFrame = (hasAudioFrameRef as any).current ? (hasAudioFrameRef as any).current() : false;
+      
+      console.log(`Stopping listening: gotMs=${gotMs}, hasFrame=${hasFrame}`);
+      
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        if (gotMs >= 100 && hasFrame) {
+          console.log('Committing audio buffer...');
+          wsRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+          // Ask the model to respond (audio + text)
+          wsRef.current.send(JSON.stringify({
+            type: 'response.create',
+            response: { modalities: ['audio', 'text'] }
+          }));
+        } else {
+          // we didn't get enough audio — don't commit empty buffer
+          console.warn('Skip commit: only', gotMs, 'ms recorded, hasFrame:', hasFrame);
+          setError("I didn't catch that—try again.");
+        }
+      }
+    } finally {
+      setIsListening(false);
     }
-    
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'input_audio_buffer.commit'
-      }));
-    }
-    
-    setIsListening(false);
   }, []);
 
   // Send text input
@@ -671,16 +789,8 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     }
 
     try {
-      // Clear previous response text for new conversation and reset streaming/drain state
-      setLastResponse('');
-      setVisibleResponse('');
-      pendingTextRef.current = '';
-      setIsPausedByUser(false); // Reset pause state for new request
-      pausedRef.current = false;
-      streamCompleteRef.current = false;
-      playbackDrainedRef.current = false;
-      setIsStreamComplete(false);
-      setIsPlaybackDrained(false);
+      // Clear all buffers and reset state for new conversation
+      clearBuffers();
       
       wsRef.current.send(JSON.stringify({
         type: 'conversation.item.create',
@@ -706,7 +816,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       console.error('Error sending text:', error);
       setError('Failed to send message');
     }
-  }, []);
+  }, [clearBuffers]);
 
   // Barge-in (interrupt current playback)
   const bargeIn = useCallback(() => {
@@ -845,6 +955,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     bargeIn,
     clearError,
     pauseOutput,
-    resumeOutput
+    resumeOutput,
+    clearBuffers
   };
 };

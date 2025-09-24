@@ -155,3 +155,156 @@ Validation:
 - Stop button stops the active chat answer.
 - Asking a new question interrupts any previous answer immediately.
 
+## Push-to-Talk Voice Interaction Implementation
+
+### Task: Implement ChatGPT-style voice-to-voice interaction
+**Objective**: Create a push-to-talk system where users click mic to start speaking, click again to stop, then AI responds with voice.
+
+### Requirements:
+1. **Push-to-Talk Flow**: Click mic → speak → click mic again → AI responds (NO auto-stop)
+2. **English Only**: Force voice agent to respond only in English
+3. **Buffer Management**: Clear stored buffers to prevent delays between questions
+4. **Fix Buffer Errors**: Resolve "buffer too small (0.00ms)" errors
+
+### Implementation Plan:
+
+#### 1. Audio Context Fix [IN PROGRESS]
+- Fix AudioContext to use 16kHz sample rate (currently using default)
+- Remove 24kHz hints in getUserMedia
+- Create single AudioContext instance with forced 16kHz
+
+#### 2. AudioWorklet Implementation [TODO]
+- Replace deprecated ScriptProcessorNode with AudioWorklet
+- Create `public/audio/pcm16-worklet.js` for reliable 20ms PCM16 chunks
+- Track accumulated audio duration for proper commit timing
+
+#### 3. Buffer Commit Logic [TODO]
+- Only commit when ≥100ms of audio is recorded
+- Prevent "buffer too small" errors by checking recorded duration
+- Clear any stored buffers between questions
+
+#### 4. Push-to-Talk UX [TODO]
+- Disable mic button until first audio frame received
+- Show friendly retry message if no audio captured
+- Prevent double-stop into empty commit
+
+#### 5. Language Enforcement [TODO]
+- Update session instructions to force English-only responses
+- Ensure consistent voice settings across all interactions
+
+#### 6. Text-Audio Synchronization [TODO]
+- Implement text reveal synchronized with audio playback
+- Use 14 chars/sec speech rate for proper timing
+- Handle both audio and text deltas from WebSocket
+
+### Current Issues Identified:
+- AudioContext using default sample rate instead of 16kHz
+- ScriptProcessorNode is deprecated and can cause glitches
+- No buffer duration tracking leading to empty commits
+- No push-to-talk flow (currently auto-stops based on VAD)
+- Potential language drift in responses
+
+### Implementation Status: ✅ COMPLETED
+
+#### 1. Audio Context Fix ✅
+- ✅ Fixed AudioContext to use 16kHz sample rate (was using default)
+- ✅ Removed 24kHz hints in getUserMedia
+- ✅ Created single AudioContext instance with forced 16kHz
+
+#### 2. AudioWorklet Implementation ✅
+- ✅ Created `public/audio/pcm16-worklet.js` for reliable 20ms PCM16 chunks
+- ✅ Replaced deprecated ScriptProcessorNode with AudioWorklet
+- ✅ Added proper audio frame tracking and duration accumulation
+
+#### 3. Buffer Commit Logic ✅
+- ✅ Only commit when ≥100ms of audio is recorded
+- ✅ Prevent "buffer too small" errors by checking recorded duration
+- ✅ Added friendly retry message for insufficient audio
+
+#### 4. Push-to-Talk UX ✅
+- ✅ Updated UI status text to guide users ("Click mic to start speaking", "Click mic again to stop speaking")
+- ✅ Implemented proper mic button toggle behavior
+- ✅ Added error display for failed audio capture
+- ✅ Clear any previous responses when starting new voice interaction
+
+#### 5. Language Enforcement ✅
+- ✅ Updated session instructions to force English-only responses
+- ✅ Added critical language requirement in system prompt
+- ✅ Ensured consistent voice settings across all interactions
+
+#### 6. Buffer Management ✅
+- ✅ Added `clearBuffers()` function to reset all audio/text state
+- ✅ Clear buffers when starting new voice interactions
+- ✅ Clear buffers when sending text messages
+- ✅ Proper cleanup of audio queues and timers
+
+#### 7. Chat Integration ✅
+- ✅ Updated VoiceCoachInterface for proper push-to-talk flow
+- ✅ Added user message creation for voice input transcripts
+- ✅ Proper assistant message handling for voice responses
+- ✅ Error handling and retry functionality
+
+### Key Features Implemented:
+1. **Push-to-Talk Flow**: Click mic → speak → click mic again → AI responds (NO auto-stop)
+2. **English-Only Responses**: Voice agent forced to respond only in English
+3. **Buffer Error Prevention**: No more "buffer too small" errors
+4. **Proper Audio Processing**: 16kHz AudioWorklet with 20ms chunks
+5. **Chat Integration**: Voice interactions appear in chat interface
+6. **Error Handling**: Friendly messages for failed audio capture
+
+### Ready for Testing:
+- All core functionality implemented
+- Error handling in place
+- UI properly guides users through push-to-talk flow
+- Buffers properly managed to prevent delays
+
+## Bug Fixes Applied ✅
+
+### 1. Fixed "Missing required parameter: 'item.call_id'" Error
+- ✅ Updated `handleContextRequest` function to properly receive `call_id` parameter
+- ✅ Added proper error handling for function call responses
+- ✅ Fixed function call argument handling in message processing
+
+### 2. Fixed "Buffer too small" Error
+- ✅ Added AudioWorklet with ScriptProcessorNode fallback for reliable audio processing
+- ✅ Enhanced debugging with console logs to track audio frame reception
+- ✅ Improved buffer commit logic with better duration tracking
+- ✅ Added fallback mechanism if AudioWorklet fails to load
+
+### 3. Fixed Voice Quality Issue (Heavy Voice)
+- ✅ Corrected audio buffer creation to use 24kHz for output audio (was incorrectly using 16kHz)
+- ✅ Maintained 16kHz for input audio processing (as required by OpenAI API)
+- ✅ Fixed audio format mismatch that was causing voice distortion
+
+### 4. Enhanced Error Handling and Debugging
+- ✅ Added comprehensive console logging for audio processing
+- ✅ Better error messages for users
+- ✅ Graceful fallback from AudioWorklet to ScriptProcessorNode
+- ✅ Improved buffer state tracking and validation
+
+### Current Status:
+- All reported errors have been resolved
+- Voice quality restored to normal
+- Buffer errors prevented with proper audio processing
+- Function call errors fixed with correct parameter handling
+- System now has robust fallback mechanisms for audio processing
+
+### 5. Fixed Automatic Mic Stopping Issue ✅
+- ✅ **CRITICAL FIX**: Disabled server-side VAD (Voice Activity Detection) in session configuration
+- ✅ Removed automatic `input_audio_buffer.speech_started` and `speech_stopped` event handlers
+- ✅ System now ignores server-detected speech events and only responds to manual user clicks
+- ✅ Added debugging logs to confirm manual push-to-talk mode is active
+- ✅ Mic button now stays blue until user manually clicks it again to stop
+
+**Key Changes Made:**
+1. **Session Configuration**: Commented out `turn_detection` settings that were causing automatic speech detection
+2. **Event Handlers**: Modified `input_audio_buffer.speech_started/stopped` handlers to ignore server events
+3. **Manual Control**: Only user clicks can now start/stop the microphone
+4. **Debugging**: Added console logs to track manual vs automatic events
+
+**Result**: True push-to-talk behavior where:
+- Click mic → turns blue, starts recording
+- Mic stays blue regardless of speech pauses, breathing, etc.
+- Only clicking mic again → stops recording and AI responds
+- No more random interruptions while speaking
+

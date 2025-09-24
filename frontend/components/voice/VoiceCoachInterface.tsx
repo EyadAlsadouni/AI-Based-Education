@@ -144,12 +144,67 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: realtimeSession.visibleResponse } : m)));
   }, [realtimeSession.visibleResponse]);
 
+  // Handle user transcript from voice input
+  useEffect(() => {
+    if (realtimeSession.currentTranscript && realtimeSession.currentTranscript.trim()) {
+      // Find the last user message and update it, or create a new one if none exists
+      setMessages(prev => {
+        const lastUserMsg = [...prev].reverse().find(m => m.role === 'user');
+        if (lastUserMsg && (lastUserMsg as any).isVoiceInput) {
+          // Update existing voice input message
+          return prev.map(m => 
+            m.id === lastUserMsg.id 
+              ? { ...m, text: realtimeSession.currentTranscript }
+              : m
+          );
+        } else {
+          // Create new user message for voice input
+          const userMsg: ChatMsg = { 
+            id: `u_${Date.now()}_${Math.random().toString(36).slice(2)}`, 
+            role: 'user', 
+            text: realtimeSession.currentTranscript,
+            createdAt: Date.now()
+          };
+          activeUserIdRef.current = userMsg.id;
+          return [...prev, userMsg];
+        }
+      });
+    }
+  }, [realtimeSession.currentTranscript]);
+
   // Removed card selection and audio handling functions - no longer needed for chat-only mode
 
   const handleMicToggle = () => {
     if (realtimeSession.isListening) {
+      // User is stopping speaking - commit the audio and wait for response
       realtimeSession.stopListening();
+      
+      // Create assistant message placeholder for the response
+      const asstId = `a_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      activeAssistantIdRef.current = asstId;
+      const assistantMsg: ChatMsg = { 
+        id: asstId, 
+        role: 'assistant', 
+        status: 'processing', 
+        createdAt: Date.now() 
+      } as ChatMsg;
+      setMessages(prev => [...prev, assistantMsg]);
+      
     } else {
+      // User is starting to speak
+      // Clear any previous errors
+      realtimeSession.clearError();
+      
+      // Clear any active assistant responses
+      const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && ['processing', 'playing', 'paused'].includes((m as any).status));
+      if (lastAssistant) {
+        realtimeSession.bargeIn();
+        audioManager.stop();
+        setMessages(prev => prev.map(m => (m.id === lastAssistant.id ? { ...(m as any), status: 'interrupted' } : m)));
+        activeAssistantIdRef.current = null;
+      }
+      
+      // Start listening
       realtimeSession.startListening();
     }
   };
@@ -483,12 +538,18 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                 )}
 
                 <p className="text-lg text-gray-600">
-                  {realtimeSession.isListening && 'Listening...'}
-                  {realtimeSession.isProcessing && 'Processing...'}
+                  {realtimeSession.isListening && 'Click mic again to stop speaking'}
+                  {realtimeSession.isProcessing && 'Processing your question...'}
                   {realtimeSession.isPlaying && 'Speaking...'}
                   {!realtimeSession.isListening && !realtimeSession.isProcessing && !realtimeSession.isPlaying &&
-                    'Ready to chat'}
+                    'Click mic to start speaking'}
                 </p>
+                
+                {realtimeSession.error && (
+                  <p className="text-sm text-red-600 mt-2">
+                    {realtimeSession.error}
+                  </p>
+                )}
               </div>
 
               {/* Toggle Chat Button */}

@@ -16,7 +16,7 @@ interface VoiceCoachInterfaceProps {
 }
 
 type ChatMsg =
-  | { id: string; role: 'user'; text: string; createdAt: number }
+  | { id: string; role: 'user'; text: string; createdAt: number; isVoiceInput?: boolean; isTextInput?: boolean }
   | {
       id: string;
       role: 'assistant';
@@ -45,6 +45,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const activeAssistantIdRef = useRef<string | null>(null);
   const chatRef = useRef<HTMLDivElement | null>(null);
+  const isSubmittingTextRef = useRef(false);
   const chatWindowRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<{ active: boolean; offsetX: number; offsetY: number }>({ active: false, offsetX: 0, offsetY: 0 });
 
@@ -147,9 +148,20 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   // Handle user transcript from voice input
   useEffect(() => {
     if (realtimeSession.currentTranscript && realtimeSession.currentTranscript.trim()) {
+      // Skip if we're currently submitting text to prevent interference
+      if (isSubmittingTextRef.current) {
+        return;
+      }
+      
       // Find the last user message and update it, or create a new one if none exists
       setMessages(prev => {
         const lastUserMsg = [...prev].reverse().find(m => m.role === 'user');
+        
+        // Don't create voice messages if the last message was a text input
+        if (lastUserMsg && (lastUserMsg as any).isTextInput) {
+          return prev;
+        }
+        
         if (lastUserMsg && (lastUserMsg as any).isVoiceInput) {
           // Update existing voice input message
           return prev.map(m => 
@@ -163,7 +175,8 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
             id: `u_${Date.now()}_${Math.random().toString(36).slice(2)}`, 
             role: 'user', 
             text: realtimeSession.currentTranscript,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            isVoiceInput: true
           };
           activeUserIdRef.current = userMsg.id;
           return [...prev, userMsg];
@@ -212,7 +225,9 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const text = textInput.trim();
-    if (!text) return;
+    if (!text || isSubmittingTextRef.current) return;
+    
+    isSubmittingTextRef.current = true;
 
     // Single-turn policy: interrupt any active assistant turn
     const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && ['processing', 'playing', 'paused'].includes((m as any).status));
@@ -227,7 +242,7 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     realtimeSession.clearError();
     
     // Append user message
-    const userMsg: ChatMsg = { id: `u_${Date.now()}_${Math.random().toString(36).slice(2)}`, role: 'user', text, createdAt: Date.now() };
+    const userMsg: ChatMsg = { id: `u_${Date.now()}_${Math.random().toString(36).slice(2)}`, role: 'user', text, createdAt: Date.now(), isTextInput: true };
     setMessages(prev => [...prev, userMsg]);
     activeUserIdRef.current = userMsg.id;
 
@@ -240,6 +255,11 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     // Send to realtime
     realtimeSession.sendText(text);
     setTextInput('');
+    
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isSubmittingTextRef.current = false;
+    }, 100);
   };
 
   // Toggle pause/resume by clicking the active user question bubble

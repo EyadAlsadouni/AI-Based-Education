@@ -46,6 +46,8 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   const activeAssistantIdRef = useRef<string | null>(null);
   const chatRef = useRef<HTMLDivElement | null>(null);
   const isSubmittingTextRef = useRef(false);
+  const textRevealCompleteRef = useRef<boolean>(false);
+  const lastFullTextRef = useRef<string>('');
   const chatWindowRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<{ active: boolean; offsetX: number; offsetY: number }>({ active: false, offsetX: 0, offsetY: 0 });
 
@@ -142,8 +144,35 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   useEffect(() => {
     const id = activeAssistantIdRef.current;
     if (!id) return;
-    setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: realtimeSession.visibleResponse } : m)));
-  }, [realtimeSession.visibleResponse]);
+    
+    const currentText = realtimeSession.visibleResponse;
+    const fullText = realtimeSession.lastResponse;
+    
+    // If we have a full response and current text is shorter, we're still streaming
+    if (fullText && currentText.length < fullText.length) {
+      // Still streaming - update the text
+      setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: currentText } : m)));
+      textRevealCompleteRef.current = false;
+      lastFullTextRef.current = fullText;
+    }
+    // If current text equals full text, we've reached the end
+    else if (fullText && currentText.length >= fullText.length && !textRevealCompleteRef.current) {
+      // Text has reached the end - stop here and don't repeat
+      setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: fullText } : m)));
+      textRevealCompleteRef.current = true;
+      lastFullTextRef.current = fullText;
+      console.log('Text reveal complete - stopping at end of answer');
+    }
+    // If text reveal is complete, don't update anymore
+    else if (textRevealCompleteRef.current) {
+      // Do nothing - text is locked at the end
+      return;
+    }
+    // Fallback - update normally
+    else {
+      setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: currentText } : m)));
+    }
+  }, [realtimeSession.visibleResponse, realtimeSession.lastResponse]);
 
   // Handle user transcript from voice input
   useEffect(() => {
@@ -203,6 +232,10 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
       } as ChatMsg;
       setMessages(prev => [...prev, assistantMsg]);
       
+      // Reset text reveal state for new response
+      textRevealCompleteRef.current = false;
+      lastFullTextRef.current = '';
+      
     } else {
       // User is starting to speak
       // Clear any previous errors
@@ -251,6 +284,10 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     activeAssistantIdRef.current = asstId;
     const assistantMsg: ChatMsg = { id: asstId, role: 'assistant', status: 'processing', createdAt: Date.now() } as ChatMsg;
     setMessages(prev => [...prev, assistantMsg]);
+    
+    // Reset text reveal state for new response
+    textRevealCompleteRef.current = false;
+    lastFullTextRef.current = '';
 
     // Send to realtime
     realtimeSession.sendText(text);

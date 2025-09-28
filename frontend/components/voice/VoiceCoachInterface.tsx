@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, MessageCircle, X } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, MessageCircle, X, Pause, Play } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useOpenAIRealtime } from '../../lib/useOpenAIRealtime';
 import { AvatarLoop, AvatarLoopRef } from './AvatarLoop';
@@ -241,12 +241,15 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
       // Clear any previous errors
       realtimeSession.clearError();
       
-      // Clear any active assistant responses
+      // Clear any active assistant responses (including paused ones)
       const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && ['processing', 'playing', 'paused'].includes((m as any).status));
       if (lastAssistant) {
+        // If there was a paused response, cancel it completely when starting new question
         realtimeSession.bargeIn();
+        realtimeSession.clearBuffers();
         audioManager.stop();
-        setMessages(prev => prev.map(m => (m.id === lastAssistant.id ? { ...(m as any), status: 'interrupted' } : m)));
+        avatarRef.current?.pause();
+        setMessages(prev => prev.map(m => (m.id === lastAssistant.id ? { ...(m as any), status: 'stopped' } : m)));
         activeAssistantIdRef.current = null;
       }
       
@@ -262,12 +265,15 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     
     isSubmittingTextRef.current = true;
 
-    // Single-turn policy: interrupt any active assistant turn
+    // Single-turn policy: interrupt any active assistant turn (including paused ones)
     const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant' && ['processing', 'playing', 'paused'].includes((m as any).status));
     if (lastAssistant) {
+      // If there was a paused response, cancel it completely when asking new question
       realtimeSession.bargeIn();
+      realtimeSession.clearBuffers();
       audioManager.stop();
-      setMessages(prev => prev.map(m => (m.id === lastAssistant.id ? { ...(m as any), status: 'interrupted' } : m)));
+      avatarRef.current?.pause();
+      setMessages(prev => prev.map(m => (m.id === lastAssistant.id ? { ...(m as any), status: 'stopped' } : m)));
       activeAssistantIdRef.current = null;
     }
 
@@ -539,19 +545,60 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
                   const showStop = realtimeSession.isPlaying || isChatPaused;
                   return showStop;
                 })() && (
-                  <button
-                    onClick={() => {
-                      const activeAssistantId = activeAssistantIdRef.current;
-                      const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
-                      if (realtimeSession.isPlaying || isChatPaused) {
-                        stopActiveChat();
-                      }
-                    }}
-                    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 cursor-pointer transition-colors shadow-lg"
-                    title="Stop Audio"
-                  >
-                    <VolumeX className="h-5 w-5" />
-                  </button>
+                  <div className="absolute top-4 right-4 flex gap-2">
+                    {/* Pause/Resume Button */}
+                    <button
+                      onClick={() => {
+                        const activeAssistantId = activeAssistantIdRef.current;
+                        const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
+                        
+                        if (isChatPaused) {
+                          // Resume if paused
+                          realtimeSession.resumeOutput();
+                          setMessages(prev => prev.map(msg => 
+                            msg.role === 'assistant' && (msg as any).id === activeAssistantId 
+                              ? { ...msg, status: 'playing' as const }
+                              : msg
+                          ));
+                        } else if (realtimeSession.isPlaying) {
+                          // Pause if playing
+                          realtimeSession.pauseOutput();
+                          setMessages(prev => prev.map(msg => 
+                            msg.role === 'assistant' && (msg as any).id === activeAssistantId 
+                              ? { ...msg, status: 'paused' as const }
+                              : msg
+                          ));
+                        }
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-2 cursor-pointer transition-colors shadow-lg"
+                      title={(() => {
+                        const activeAssistantId = activeAssistantIdRef.current;
+                        const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
+                        return isChatPaused ? "Resume Audio" : "Pause Audio";
+                      })()}
+                    >
+                      {(() => {
+                        const activeAssistantId = activeAssistantIdRef.current;
+                        const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
+                        return isChatPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />;
+                      })()}
+                    </button>
+                    
+                    {/* Stop Button */}
+                    <button
+                      onClick={() => {
+                        const activeAssistantId = activeAssistantIdRef.current;
+                        const isChatPaused = !!activeAssistantId && !!messages.find(mm => mm.role === 'assistant' && (mm as any).id === activeAssistantId && (mm as any).status === 'paused');
+                        if (realtimeSession.isPlaying || isChatPaused) {
+                          stopActiveChat();
+                        }
+                      }}
+                      className="bg-red-500 hover:bg-red-600 text-white rounded-full p-2 cursor-pointer transition-colors shadow-lg"
+                      title="Stop Audio"
+                    >
+                      <VolumeX className="h-5 w-5" />
+                    </button>
+                  </div>
                 )}
               </div>
 

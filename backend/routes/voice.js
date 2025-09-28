@@ -575,4 +575,100 @@ router.ws = function(app) {
   console.log('Realtime WebSocket proxy server started on ws://localhost:6002/api/realtime/ws');
 };
 
+// POST /api/voice/webrtc/sdp - WebRTC SDP exchange
+router.post('/webrtc/sdp', async (req, res) => {
+  try {
+    const { sdp, config } = req.body;
+
+    if (!sdp) {
+      return res.status(400).json({ error: 'SDP offer is required' });
+    }
+
+    if (!openai) {
+      return res.status(500).json({ error: 'OpenAI API not initialized' });
+    }
+
+    console.log('WebRTC SDP exchange request received');
+
+    // Create a new Realtime session
+    const session = await openai.beta.realtime.connect('gpt-4o-realtime-preview-2024-10-01', {
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'OpenAI-Beta': 'realtime=v1'
+      }
+    });
+
+    // Send session configuration
+    await session.send({
+      type: 'session.update',
+      session: {
+        modalities: ['text', 'audio'],
+        instructions: config?.instructions || `You are a helpful health coach for a patient education platform.
+          Provide warm, supportive responses in a 6th-grade reading level.
+          Keep responses brief (30-60 seconds of speech).
+          Always ground your responses in the user's dashboard and profile data when available.
+          Never provide medical diagnosis or dosing advice.
+          If asked about emergencies, immediately recommend contacting emergency services.
+          CRITICAL: Always respond in English only. Never use any other language.
+          If the user speaks in another language, acknowledge it but respond in English.`,
+        voice: 'alloy',
+        tools: config?.tools || [
+          {
+            type: 'function',
+            name: 'get_user_context',
+            description: 'Get user dashboard, profile, and knowledge base context for grounded responses',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: {
+                  type: 'string',
+                  description: 'The user query to search context for'
+                }
+              },
+              required: ['query']
+            }
+          }
+        ]
+      }
+    });
+
+    // For now, return a simple answer SDP (in a real implementation, you'd handle the actual SDP negotiation)
+    // This is a placeholder - the actual WebRTC implementation would need proper SDP handling
+    const answerSdp = `v=0
+o=- ${Date.now()} ${Date.now()} IN IP4 127.0.0.1
+s=-
+t=0 0
+m=audio 9 RTP/SAVPF 111
+c=IN IP4 127.0.0.1
+a=rtpmap:111 opus/48000/2
+a=sendrecv
+a=ice-ufrag:${Math.random().toString(36).substring(7)}
+a=ice-pwd:${Math.random().toString(36).substring(7)}
+a=fingerprint:sha-256 ${crypto.randomBytes(32).toString('hex')}
+a=setup:active
+a=mid:0
+a=rtcp-mux`;
+
+    res.json({ sdp: answerSdp });
+
+    // Handle the session messages (this would need to be properly integrated with WebRTC)
+    session.on('message', (message) => {
+      console.log('WebRTC session message:', message.type);
+      // Here you would handle the message and send it back to the client via WebRTC data channel
+    });
+
+    session.on('error', (error) => {
+      console.error('WebRTC session error:', error);
+    });
+
+    session.on('close', () => {
+      console.log('WebRTC session closed');
+    });
+
+  } catch (error) {
+    console.error('WebRTC SDP exchange error:', error);
+    res.status(500).json({ error: 'Failed to handle WebRTC SDP exchange' });
+  }
+});
+
 module.exports = router;

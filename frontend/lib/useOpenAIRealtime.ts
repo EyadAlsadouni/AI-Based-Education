@@ -131,6 +131,9 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         playbackDrainedRef.current = false;
         setIsStreamComplete(false);
         setIsPlaybackDrained(false);
+        // Reset active response flag on new connection
+        hasActiveResponseRef.current = false;
+        setIsProcessing(false);
         
         // Wait a bit before sending session configuration
         setTimeout(() => {
@@ -259,6 +262,15 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           stoppedUntilNextResponseRef.current = false;
           hasActiveResponseRef.current = true;
           setIsProcessing(true);
+          
+          // Add timeout to reset active response flag if it gets stuck
+          setTimeout(() => {
+            if (hasActiveResponseRef.current) {
+              console.log('Timeout: Force resetting active response flag');
+              hasActiveResponseRef.current = false;
+              setIsProcessing(false);
+            }
+          }, 30000); // 30 second timeout
           break;
 
         case 'response.audio.delta':
@@ -293,6 +305,17 @@ export const useOpenAIRealtime = (): RealtimeSession => {
           streamCompleteRef.current = true;
           setIsStreamComplete(true);
           hasActiveResponseRef.current = false;
+          setIsProcessing(false);
+          break;
+        }
+
+        case 'response.done':
+        case 'response.finished': {
+          // Response is completely finished
+          streamCompleteRef.current = true;
+          setIsStreamComplete(true);
+          hasActiveResponseRef.current = false;
+          setIsProcessing(false);
           break;
         }
 
@@ -374,9 +397,11 @@ export const useOpenAIRealtime = (): RealtimeSession => {
                               'Unknown API error';
           // Treat cancellation-without-active-response as benign
           const lower = String(errorMessage || '').toLowerCase();
-          const isBenignCancel = lower.includes('cancellation failed') || lower.includes('no active response');
+          const isBenignCancel = lower.includes('cancellation failed') || 
+                                lower.includes('no active response') ||
+                                lower.includes('buffer too small');
           if (isBenignCancel) {
-            console.warn('Realtime cancel benign error suppressed:', errorMessage);
+            console.warn('Realtime benign error suppressed:', errorMessage);
             hasActiveResponseRef.current = false;
             break;
           }
@@ -606,6 +631,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     isPlayingAudioRef.current = false;
     setIsPlaying(false);
     setIsProcessing(false);
+    hasActiveResponseRef.current = false;
     
     // Clear reveal timer
     if (revealTimerRef.current) {
@@ -761,18 +787,25 @@ export const useOpenAIRealtime = (): RealtimeSession => {
       console.log(`Stopping listening: gotMs=${gotMs}, hasFrame=${hasFrame}`);
       
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        if (gotMs >= 100 && hasFrame) {
+        // More lenient threshold - allow any audio > 0ms
+        if (gotMs > 0) {
           console.log('Committing audio buffer...');
           wsRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-          // Ask the model to respond (audio + text)
-          wsRef.current.send(JSON.stringify({
-            type: 'response.create',
-            response: { modalities: ['audio', 'text'] }
-          }));
+          
+          // Check if there's already an active response before creating a new one
+          if (!hasActiveResponseRef.current) {
+            console.log('Creating new response...');
+            wsRef.current.send(JSON.stringify({
+              type: 'response.create',
+              response: { modalities: ['audio', 'text'] }
+            }));
+          } else {
+            console.log('Skipping response.create - already have active response');
+          }
         } else {
-          // we didn't get enough audio — don't commit empty buffer
-          console.warn('Skip commit: only', gotMs, 'ms recorded, hasFrame:', hasFrame);
-          setError("I didn't catch that—try again.");
+          // we didn't get any audio — don't commit empty buffer
+          console.warn('Skip commit: no audio recorded (0ms)');
+          setError("I didn't catch that—try speaking a bit longer.");
         }
       }
     } finally {
@@ -785,6 +818,12 @@ export const useOpenAIRealtime = (): RealtimeSession => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket not connected, cannot send text');
       setError('Not connected to Voice Coach');
+      return;
+    }
+
+    // Check if there's already an active response
+    if (hasActiveResponseRef.current) {
+      console.log('Skipping text send - already have active response');
       return;
     }
 
@@ -806,9 +845,14 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         }
       }));
 
-      wsRef.current.send(JSON.stringify({
-        type: 'response.create'
-      }));
+      // Check if there's already an active response before creating a new one
+      if (!hasActiveResponseRef.current) {
+        wsRef.current.send(JSON.stringify({
+          type: 'response.create'
+        }));
+      } else {
+        console.log('Skipping response.create in sendText - already have active response');
+      }
 
       setCurrentTranscript(text);
       setIsProcessing(true);

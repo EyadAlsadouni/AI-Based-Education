@@ -65,7 +65,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const pendingTextRef = useRef('');
   const revealTimerRef = useRef<number | null>(null);
   const lastRevealTsRef = useRef<number>(0);
-  const charsPerSecondRef = useRef<number>(0.1); // conservative rate for readable sync
+  const charsPerSecondRef = useRef<number>(18); // conservative rate for readable sync
   
   // Removed complex paused buffer tracking; we rely on AudioContext suspend/resume
 

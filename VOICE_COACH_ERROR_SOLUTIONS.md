@@ -106,7 +106,39 @@ This document contains all the errors we've encountered during Voice Coach devel
    }
    ```
 
+5. **Aggressive Error Detection & Recovery:**
+   ```typescript
+   // Detect specific "active response" error and force reset
+   const isActiveResponseError = lower.includes('conversation already has an active response');
+   if (isActiveResponseError) {
+     console.warn('Active response error detected - force resetting state:', errorMessage);
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     break;
+   }
+   ```
+
+6. **Force Reset Before New Interactions:**
+   ```typescript
+   // In startListening and sendText functions
+   hasActiveResponseRef.current = false;
+   setIsProcessing(false);
+   ```
+
+7. **Emergency Reset Function:**
+   ```typescript
+   const forceResetState = useCallback(() => {
+     console.log('Force resetting all state...');
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     setError(null);
+     clearBuffers();
+   }, [clearBuffers]);
+   ```
+
 **Files Modified:** `frontend/lib/useOpenAIRealtime.ts`
+
+**Note:** This error required multiple layers of protection including proactive prevention, error detection, and emergency recovery mechanisms.
 
 ---
 

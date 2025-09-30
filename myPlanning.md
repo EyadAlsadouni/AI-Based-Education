@@ -308,3 +308,48 @@ Validation:
 - Only clicking mic again → stops recording and AI responds
 - No more random interruptions while speaking
 
+## Step 3 & 4 Improvements - December 2024
+
+### Task: Fix Step 3 optional question and improve Step 4 questions
+**Objective**: Make Step 3 questions more user-friendly and Step 4 questions more concise and focused.
+
+### Completed Tasks ✅
+
+#### 1. Made Step 3 Last Question Optional ✅
+- ✅ Confirmed learning style question is already optional in Step 3
+- ✅ No validation required for optional learning style question
+- ✅ User can skip this question without blocking progress
+
+#### 2. Fixed React Key Error ✅
+- ✅ Fixed duplicate "Other..." keys in dynamic goal generation
+- ✅ Added proper deduplication logic to prevent duplicate keys
+- ✅ Ensured unique keys for all React list items
+
+#### 3. Fixed 404 API Error ✅
+- ✅ Improved fallback logic for goal loading in Step 4
+- ✅ Generate dynamic goals first, then try API as backup
+- ✅ Added proper error handling for API failures
+- ✅ No more blocking 404 errors
+
+#### 4. Improved Step 4 Questions ✅
+- ✅ Made questions more concise and focused
+- ✅ Changed "What is your main goal" to "What's your main goal"
+- ✅ Added helpful context: "Choose the most important thing you want to achieve"
+- ✅ Updated placeholder examples to be more relevant to specific conditions
+- ✅ Made main question optional with better hint text
+- ✅ Reduced textarea rows from 4 to 3 for better UX
+
+### Key Improvements Made:
+1. **Better Question Flow**: Step 3 → Step 4 now flows more naturally
+2. **Dynamic Goals**: Step 4 goals are now personalized based on user's previous choices
+3. **Error Prevention**: Fixed React key errors and API 404 errors
+4. **User Experience**: More concise, focused questions that are easier to understand
+5. **Optional Fields**: Clear indication of what's required vs optional
+
+### Current Status:
+- Step 3: Learning style question is optional, no validation blocking
+- Step 4: Dynamic, personalized goals based on user's health goal, knowledge level, and interests
+- No more React key errors or 404 API errors
+- Questions are more concise and user-friendly
+- Better placeholder examples that match the specific condition selected
+

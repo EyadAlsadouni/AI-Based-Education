@@ -67,13 +67,13 @@ export interface Step3FormData {
   knowledge_level: 'new' | 'some' | 'experienced';
   main_interests: string[];
   biggest_challenge: string;
-  learning_style?: 'quick_tips' | 'step_by_step' | 'videos';
 }
 
 // Step 4 form data (goals and questions)
 export interface Step4FormData {
   main_goal: string;
   main_question?: string;
+  learning_style?: 'quick_tips' | 'step_by_step' | 'videos';
 }
 
 // Dashboard card content

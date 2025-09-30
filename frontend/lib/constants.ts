@@ -138,7 +138,303 @@ export const GENDER_OPTIONS: { value: string; label: string }[] = [
   { value: 'other', label: 'Other' }
 ];
 
-// Default condition goals (fallback if API fails)
+// Dynamic Step 4 goal options based on user's previous choices
+export const DYNAMIC_STEP4_GOALS: Record<string, {
+  knowledgeLevel: Record<string, string[]>;
+  mainInterests: Record<string, string[]>;
+  healthGoal: Record<string, string[]>;
+}> = {
+  // Education about the condition
+  'Education about the condition (e.g., Diabetes, Heart Health)': {
+    knowledgeLevel: {
+      new: [
+        'Learn the basics about my condition',
+        'Understand what causes my condition',
+        'Know the warning signs to watch for',
+        'Learn how to manage it daily',
+        'Other...'
+      ],
+      some: [
+        'Deepen my understanding of my condition',
+        'Learn advanced management strategies',
+        'Understand complications and prevention',
+        'Improve my daily management routine',
+        'Other...'
+      ],
+      experienced: [
+        'Stay updated on latest treatments',
+        'Optimize my current management plan',
+        'Learn about new research findings',
+        'Help others with similar conditions',
+        'Other...'
+      ]
+    },
+    mainInterests: {
+      blood_sugar: [
+        'Keep my blood sugar stable',
+        'Understand blood sugar patterns',
+        'Learn about blood sugar monitoring',
+        'Manage blood sugar during illness',
+        'Other...'
+      ],
+      diet: [
+        'Plan healthy meals for my condition',
+        'Understand food effects on my condition',
+        'Learn about portion control',
+        'Find condition-friendly recipes',
+        'Other...'
+      ],
+      exercise: [
+        'Find safe exercises for my condition',
+        'Learn how exercise affects my condition',
+        'Create a sustainable exercise routine',
+        'Manage my condition during workouts',
+        'Other...'
+      ],
+      medications: [
+        'Understand how my medications work',
+        'Learn about medication side effects',
+        'Know when to adjust medications',
+        'Manage multiple medications safely',
+        'Other...'
+      ],
+      daily_life: [
+        'Integrate condition management into daily life',
+        'Manage my condition at work',
+        'Travel safely with my condition',
+        'Handle social situations with my condition',
+        'Other...'
+      ],
+      complications: [
+        'Prevent serious complications',
+        'Recognize early warning signs',
+        'Know when to seek emergency help',
+        'Manage existing complications',
+        'Other...'
+      ]
+    },
+    healthGoal: {
+      'Education about the condition (e.g., Diabetes, Heart Health)': [
+        'Understand my condition better',
+        'Learn effective management strategies',
+        'Improve my quality of life',
+        'Prevent complications',
+        'Other...'
+      ]
+    }
+  },
+  // How to use my medication
+  'How to use my medication (e.g., Insulin injection, Asthma inhaler)': {
+    knowledgeLevel: {
+      new: [
+        'Learn proper medication technique',
+        'Understand when and how to take my medication',
+        'Know how to store my medication safely',
+        'Build confidence in using my medication',
+        'Other...'
+      ],
+      some: [
+        'Improve my medication technique',
+        'Learn advanced medication management',
+        'Optimize my medication timing',
+        'Troubleshoot common medication issues',
+        'Other...'
+      ],
+      experienced: [
+        'Fine-tune my medication routine',
+        'Learn about new medication options',
+        'Help others with similar medications',
+        'Stay updated on best practices',
+        'Other...'
+      ]
+    },
+    mainInterests: {
+      technique: [
+        'Master proper medication technique',
+        'Learn different administration methods',
+        'Understand proper timing and dosing',
+        'Know how to adjust for different situations',
+        'Other...'
+      ],
+      safety: [
+        'Use my medication safely',
+        'Recognize and prevent side effects',
+        'Know about drug interactions',
+        'Store and handle medication properly',
+        'Other...'
+      ],
+      troubleshooting: [
+        'Solve common medication problems',
+        'Know when to call my doctor',
+        'Handle medication emergencies',
+        'Adjust for lifestyle changes',
+        'Other...'
+      ],
+      confidence: [
+        'Feel confident using my medication',
+        'Overcome medication anxiety',
+        'Teach others about my medication',
+        'Manage medication in public',
+        'Other...'
+      ]
+    },
+    healthGoal: {
+      'How to use my medication (e.g., Insulin injection, Asthma inhaler)': [
+        'Master proper medication technique',
+        'Use my medication safely and effectively',
+        'Feel confident managing my medication',
+        'Optimize my medication routine',
+        'Other...'
+      ]
+    }
+  },
+  // Preparing for a procedure
+  'Preparing for a procedure (e.g., Endoscopy, Surgery)': {
+    knowledgeLevel: {
+      new: [
+        'Understand what my procedure involves',
+        'Learn how to prepare properly',
+        'Know what to expect during recovery',
+        'Feel confident about the procedure',
+        'Other...'
+      ],
+      some: [
+        'Optimize my preparation process',
+        'Learn advanced recovery strategies',
+        'Understand potential complications',
+        'Prepare for the best possible outcome',
+        'Other...'
+      ],
+      experienced: [
+        'Fine-tune my preparation routine',
+        'Learn about new procedure techniques',
+        'Help others prepare for similar procedures',
+        'Stay updated on best practices',
+        'Other...'
+      ]
+    },
+    mainInterests: {
+      preparation: [
+        'Follow pre-procedure instructions correctly',
+        'Prepare my body for the procedure',
+        'Arrange necessary support and care',
+        'Manage pre-procedure anxiety',
+        'Other...'
+      ],
+      what_to_expect: [
+        'Know what happens during the procedure',
+        'Understand the recovery process',
+        'Learn about pain management',
+        'Know when to call the doctor',
+        'Other...'
+      ],
+      recovery: [
+        'Heal properly after the procedure',
+        'Manage pain and discomfort',
+        'Return to normal activities safely',
+        'Prevent complications during recovery',
+        'Other...'
+      ],
+      diet_restrictions: [
+        'Follow post-procedure diet guidelines',
+        'Understand what foods to avoid',
+        'Plan nutritious recovery meals',
+        'Manage appetite changes',
+        'Other...'
+      ],
+      medication_adjustments: [
+        'Adjust medications before procedure',
+        'Manage medications during recovery',
+        'Understand drug interactions',
+        'Know when to resume normal medications',
+        'Other...'
+      ],
+      results: [
+        'Understand my procedure results',
+        'Know what the results mean',
+        'Plan follow-up care',
+        'Make informed decisions about next steps',
+        'Other...'
+      ]
+    },
+    healthGoal: {
+      'Preparing for a procedure (e.g., Endoscopy, Surgery)': [
+        'Prepare thoroughly for my procedure',
+        'Have a smooth recovery process',
+        'Understand what to expect',
+        'Feel confident and informed',
+        'Other...'
+      ]
+    }
+  },
+  // Psychological health
+  'Psychological health (panic attacks, anxiety management)': {
+    knowledgeLevel: {
+      new: [
+        'Understand my mental health condition',
+        'Learn basic coping strategies',
+        'Know when to seek professional help',
+        'Build a support system',
+        'Other...'
+      ],
+      some: [
+        'Develop advanced coping skills',
+        'Learn about treatment options',
+        'Improve my daily mental health routine',
+        'Understand triggers and prevention',
+        'Other...'
+      ],
+      experienced: [
+        'Fine-tune my mental health strategies',
+        'Learn about new treatment approaches',
+        'Help others with similar challenges',
+        'Stay updated on mental health research',
+        'Other...'
+      ]
+    },
+    mainInterests: {
+      anxiety: [
+        'Manage daily anxiety effectively',
+        'Learn panic attack prevention strategies',
+        'Develop anxiety coping techniques',
+        'Build confidence in anxiety management',
+        'Other...'
+      ],
+      depression: [
+        'Improve my mood and outlook',
+        'Develop depression coping strategies',
+        'Build healthy daily routines',
+        'Understand depression treatment options',
+        'Other...'
+      ],
+      stress: [
+        'Manage stress in healthy ways',
+        'Learn stress reduction techniques',
+        'Create work-life balance',
+        'Develop resilience to stress',
+        'Other...'
+      ],
+      sleep: [
+        'Improve my sleep quality',
+        'Develop healthy sleep habits',
+        'Manage sleep-related anxiety',
+        'Understand sleep and mental health connection',
+        'Other...'
+      ]
+    },
+    healthGoal: {
+      'Psychological health (panic attacks, anxiety management)': [
+        'Improve my mental health and wellbeing',
+        'Develop effective coping strategies',
+        'Build resilience and confidence',
+        'Create a sustainable mental health routine',
+        'Other...'
+      ]
+    }
+  }
+};
+
+// Legacy condition goals (fallback if API fails)
 export const DEFAULT_CONDITION_GOALS: Record<string, string[]> = {
   diabetes: [
     'Lower my blood sugar levels',
@@ -721,7 +1017,315 @@ export const STEP3_QUESTIONS: Record<string, {
         { value: 'videos', label: 'Videos - Visual demonstrations and explanations' }
       ]
     }
+  },
+  // Psychological health conditions
+  'Anxiety & Panic': {
+    knowledgeLevel: {
+      question: 'How familiar are you with managing anxiety and panic?',
+      options: [
+        { value: 'new', label: 'New to this - I\'m just starting to learn about anxiety management' },
+        { value: 'some', label: 'Some experience - I know the basics but want to learn more' },
+        { value: 'experienced', label: 'Quite knowledgeable - I understand it well but want specific tips' }
+      ]
+    },
+    mainInterests: {
+      question: 'What would you most like to learn about managing anxiety?',
+      options: [
+        { value: 'breathing_techniques', label: 'Breathing and relaxation techniques' },
+        { value: 'panic_attacks', label: 'Managing panic attacks' },
+        { value: 'triggers', label: 'Identifying and managing anxiety triggers' },
+        { value: 'coping_strategies', label: 'Healthy coping strategies' },
+        { value: 'medication', label: 'Understanding anxiety medications' },
+        { value: 'lifestyle', label: 'Lifestyle changes for anxiety management' }
+      ]
+    },
+    biggestChallenge: {
+      question: 'What\'s your biggest challenge with anxiety right now?',
+      placeholder: 'e.g., "Managing panic attacks" or "Feeling anxious in social situations"',
+      examples: [
+        'Managing panic attacks',
+        'Feeling anxious in social situations',
+        'Sleep problems due to anxiety',
+        'Work-related anxiety',
+        'General worry and overthinking'
+      ]
+    },
+    learningStyle: {
+      question: 'How do you prefer to learn?',
+      options: [
+        { value: 'quick_tips', label: 'Quick tips - Short, easy-to-read information' },
+        { value: 'step_by_step', label: 'Step-by-step guides - Detailed instructions I can follow' },
+        { value: 'videos', label: 'Videos - Visual demonstrations and explanations' }
+      ]
+    }
+  },
+  'Depression': {
+    knowledgeLevel: {
+      question: 'How familiar are you with managing depression?',
+      options: [
+        { value: 'new', label: 'New to this - I\'m just starting to learn about depression management' },
+        { value: 'some', label: 'Some experience - I know the basics but want to learn more' },
+        { value: 'experienced', label: 'Quite knowledgeable - I understand it well but want specific tips' }
+      ]
+    },
+    mainInterests: {
+      question: 'What would you most like to learn about managing depression?',
+      options: [
+        { value: 'mood_regulation', label: 'Mood regulation strategies' },
+        { value: 'daily_routines', label: 'Building healthy daily routines' },
+        { value: 'medication', label: 'Understanding depression medications' },
+        { value: 'therapy', label: 'Therapy and counseling approaches' },
+        { value: 'lifestyle', label: 'Lifestyle changes for depression' },
+        { value: 'support_systems', label: 'Building support systems' }
+      ]
+    },
+    biggestChallenge: {
+      question: 'What\'s your biggest challenge with depression right now?',
+      placeholder: 'e.g., "Lack of motivation" or "Feeling hopeless about the future"',
+      examples: [
+        'Lack of motivation and energy',
+        'Feeling hopeless about the future',
+        'Sleep problems',
+        'Difficulty concentrating',
+        'Social isolation'
+      ]
+    },
+    learningStyle: {
+      question: 'How do you prefer to learn?',
+      options: [
+        { value: 'quick_tips', label: 'Quick tips - Short, easy-to-read information' },
+        { value: 'step_by_step', label: 'Step-by-step guides - Detailed instructions I can follow' },
+        { value: 'videos', label: 'Videos - Visual demonstrations and explanations' }
+      ]
+    }
+  },
+  'Stress & Coping': {
+    knowledgeLevel: {
+      question: 'How familiar are you with stress management?',
+      options: [
+        { value: 'new', label: 'New to this - I\'m just starting to learn about stress management' },
+        { value: 'some', label: 'Some experience - I know the basics but want to learn more' },
+        { value: 'experienced', label: 'Quite knowledgeable - I understand it well but want specific tips' }
+      ]
+    },
+    mainInterests: {
+      question: 'What would you most like to learn about stress management?',
+      options: [
+        { value: 'relaxation_techniques', label: 'Relaxation techniques' },
+        { value: 'time_management', label: 'Time management and organization' },
+        { value: 'work_life_balance', label: 'Work-life balance' },
+        { value: 'mindfulness', label: 'Mindfulness and meditation' },
+        { value: 'physical_activity', label: 'Physical activity for stress relief' },
+        { value: 'coping_skills', label: 'Healthy coping skills' }
+      ]
+    },
+    biggestChallenge: {
+      question: 'What\'s your biggest challenge with stress right now?',
+      placeholder: 'e.g., "Work pressure" or "Finding time for self-care"',
+      examples: [
+        'Work pressure and deadlines',
+        'Finding time for self-care',
+        'Financial stress',
+        'Relationship stress',
+        'Health-related stress'
+      ]
+    },
+    learningStyle: {
+      question: 'How do you prefer to learn?',
+      options: [
+        { value: 'quick_tips', label: 'Quick tips - Short, easy-to-read information' },
+        { value: 'step_by_step', label: 'Step-by-step guides - Detailed instructions I can follow' },
+        { value: 'videos', label: 'Videos - Visual demonstrations and explanations' }
+      ]
+    }
+  },
+  'Sleep Health': {
+    knowledgeLevel: {
+      question: 'How familiar are you with sleep health?',
+      options: [
+        { value: 'new', label: 'New to this - I\'m just starting to learn about sleep health' },
+        { value: 'some', label: 'Some experience - I know the basics but want to learn more' },
+        { value: 'experienced', label: 'Quite knowledgeable - I understand it well but want specific tips' }
+      ]
+    },
+    mainInterests: {
+      question: 'What would you most like to learn about sleep health?',
+      options: [
+        { value: 'sleep_hygiene', label: 'Sleep hygiene and routines' },
+        { value: 'sleep_disorders', label: 'Understanding sleep disorders' },
+        { value: 'medication', label: 'Sleep medications and alternatives' },
+        { value: 'lifestyle', label: 'Lifestyle changes for better sleep' },
+        { value: 'stress_sleep', label: 'Managing stress and sleep' },
+        { value: 'environment', label: 'Creating a sleep-friendly environment' }
+      ]
+    },
+    biggestChallenge: {
+      question: 'What\'s your biggest challenge with sleep right now?',
+      placeholder: 'e.g., "Falling asleep" or "Staying asleep through the night"',
+      examples: [
+        'Falling asleep',
+        'Staying asleep through the night',
+        'Waking up too early',
+        'Feeling tired during the day',
+        'Sleep anxiety'
+      ]
+    },
+    learningStyle: {
+      question: 'How do you prefer to learn?',
+      options: [
+        { value: 'quick_tips', label: 'Quick tips - Short, easy-to-read information' },
+        { value: 'step_by_step', label: 'Step-by-step guides - Detailed instructions I can follow' },
+        { value: 'videos', label: 'Videos - Visual demonstrations and explanations' }
+      ]
+    }
   }
+};
+
+// Condition-specific goal mappings for more targeted goals
+const CONDITION_SPECIFIC_GOALS: Record<string, string[]> = {
+  'Diabetes': [
+    'Lower my blood sugar levels',
+    'Understand my medications',
+    'Plan diabetes-friendly meals',
+    'Learn to monitor glucose levels',
+    'Manage complications',
+    'Feel more confident in managing my day'
+  ],
+  'Heart & Blood Pressure': [
+    'Lower my blood pressure',
+    'Understand my heart medications',
+    'Plan heart-healthy meals',
+    'Learn to monitor my blood pressure',
+    'Reduce my risk of heart disease',
+    'Feel more confident about my heart health'
+  ],
+  'Respiratory (Asthma/COPD)': [
+    'Breathe easier with my condition',
+    'Master proper inhaler technique',
+    'Recognize and manage asthma triggers',
+    'Know when to use my rescue inhaler',
+    'Exercise safely with breathing problems',
+    'Feel confident managing my breathing'
+  ],
+  'Digestive / Gut Health': [
+    'Improve my digestive symptoms',
+    'Plan gut-friendly meals',
+    'Understand my digestive medications',
+    'Identify food triggers',
+    'Manage stress and digestion',
+    'Feel more comfortable with my gut health'
+  ],
+  'Insulin & Diabetes Medicines': [
+    'Master proper injection technique',
+    'Reduce injection pain and discomfort',
+    'Learn about injection site rotation',
+    'Handle injection emergencies',
+    'Feel confident with insulin management',
+    'Optimize my insulin timing'
+  ],
+  'Inhalers (Asthma/COPD)': [
+    'Master proper inhaler technique',
+    'Learn different types of inhalers',
+    'Understand when to use each inhaler',
+    'Reduce inhaler anxiety and build confidence',
+    'Know how to clean and maintain my inhaler',
+    'Feel confident using my inhaler in public'
+  ],
+  'Blood-Pressure Medicines': [
+    'Understand how my blood pressure medications work',
+    'Learn proper medication timing',
+    'Recognize and manage side effects',
+    'Know when to call my doctor',
+    'Feel confident managing my blood pressure',
+    'Optimize my medication routine'
+  ],
+  'Cholesterol Medicines (Statins)': [
+    'Understand how statins work',
+    'Learn about statin side effects',
+    'Know when to take my statin',
+    'Understand drug interactions',
+    'Feel confident with my cholesterol management',
+    'Monitor my cholesterol levels effectively'
+  ],
+  'Anxiety & Panic': [
+    'Manage anxiety and panic attacks',
+    'Learn breathing and relaxation techniques',
+    'Understand my anxiety triggers',
+    'Build confidence in stressful situations',
+    'Develop healthy coping strategies',
+    'Feel more in control of my anxiety'
+  ],
+  'Depression': [
+    'Understand and manage my depression',
+    'Learn mood regulation strategies',
+    'Build healthy daily routines',
+    'Know when to seek additional help',
+    'Develop positive thinking patterns',
+    'Feel more hopeful about my future'
+  ],
+  'Stress & Coping': [
+    'Develop effective stress management',
+    'Learn healthy coping mechanisms',
+    'Balance work and personal life',
+    'Build resilience to stress',
+    'Create a sustainable stress management routine',
+    'Feel more in control of my stress'
+  ],
+  'Sleep Health': [
+    'Improve my sleep quality',
+    'Establish healthy sleep routines',
+    'Manage sleep-related anxiety',
+    'Understand the connection between sleep and health',
+    'Create a relaxing bedtime routine',
+    'Feel more rested and energized'
+  ]
+};
+
+// Function to generate dynamic Step 4 goals based on user's previous choices
+export const generateDynamicGoals = (
+  healthGoal: string,
+  condition: string,
+  knowledgeLevel: string,
+  mainInterests: string[]
+): string[] => {
+  // First, try to get condition-specific goals
+  const conditionGoals = CONDITION_SPECIFIC_GOALS[condition];
+  if (conditionGoals) {
+    return conditionGoals;
+  }
+
+  // Fallback to dynamic goals based on health goal
+  const dynamicGoals = DYNAMIC_STEP4_GOALS[healthGoal];
+  
+  if (!dynamicGoals) {
+    // Final fallback to legacy goals
+    const conditionKey = condition.toLowerCase().replace(/\s+/g, '_');
+    return DEFAULT_CONDITION_GOALS[conditionKey] || DEFAULT_CONDITION_GOALS['diabetes'];
+  }
+
+  // Start with knowledge level goals
+  const knowledgeGoals = dynamicGoals.knowledgeLevel[knowledgeLevel] || [];
+  
+  // Add goals based on main interests (limit to 2 most relevant)
+  const interestGoals: string[] = [];
+  mainInterests.slice(0, 2).forEach(interest => {
+    const goals = dynamicGoals.mainInterests[interest] || [];
+    interestGoals.push(...goals.slice(0, 2)); // Take top 2 from each interest
+  });
+  
+  // Add health goal specific goals
+  const healthGoalOptions = dynamicGoals.healthGoal[healthGoal] || [];
+  
+  // Combine and deduplicate
+  const allGoals = [...knowledgeGoals, ...interestGoals, ...healthGoalOptions];
+  const uniqueGoals = Array.from(new Set(allGoals));
+  
+  // Limit to 6 goals total and add "Other..." option
+  const finalGoals = uniqueGoals.slice(0, 5);
+  if (!finalGoals.includes('Other...')) {
+    finalGoals.push('Other...');
+  }
+  return finalGoals;
 };
 
 // Step names for navigation

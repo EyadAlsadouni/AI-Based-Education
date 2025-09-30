@@ -94,19 +94,19 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
         )}
       </div>
 
-      {/* Biggest Challenge */}
+      {/* Biggest Challenge - Now Optional */}
       <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
         <h4 className="text-lg font-medium text-gray-900 mb-4">
           {questions.biggestChallenge.question}
-          <span className="text-red-500 ml-1">*</span>
+          <span className="text-gray-500 ml-1">(Optional)</span>
         </h4>
+        <p className="text-sm text-gray-600 mb-4">This helps us understand any specific challenges you're facing:</p>
         <Input
           type="text"
           placeholder={questions.biggestChallenge.placeholder}
           value={formData.biggest_challenge}
           onChange={(e) => onFormDataChange('biggest_challenge', e.target.value)}
           error={errors.biggest_challenge}
-          required
         />
         <div className="mt-3">
           <p className="text-sm text-gray-600 mb-2">Here are some examples:</p>
@@ -123,29 +123,6 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
         </div>
       </div>
 
-      {/* Learning Style (Optional) */}
-      <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">
-          {questions.learningStyle.question}
-          <span className="text-gray-500 ml-1">(Optional)</span>
-        </h4>
-        <p className="text-sm text-gray-600 mb-4">This helps us show you information in your preferred format:</p>
-        <div className="space-y-3">
-          {questions.learningStyle.options.map((option) => (
-            <label key={option.value} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <input
-                type="radio"
-                name="learning_style"
-                value={option.value}
-                checked={formData.learning_style === option.value}
-                onChange={() => onFormDataChange('learning_style', option.value)}
-                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-              />
-              <span className="text-sm text-gray-700 leading-5">{option.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };
@@ -160,8 +137,7 @@ export const Step3Component: React.FC = () => {
   const [formData, setFormData] = useState<Step3FormData>({
     knowledge_level: 'new',
     main_interests: [],
-    biggest_challenge: '',
-    learning_style: undefined
+    biggest_challenge: ''
   });
 
   // Check if user has completed previous steps
@@ -221,12 +197,7 @@ export const Step3Component: React.FC = () => {
       newErrors.main_interests = 'Please select at least one area of interest';
     }
 
-    // Validate biggest challenge (required)
-    if (!formData.biggest_challenge.trim()) {
-      newErrors.biggest_challenge = 'Please tell us about your biggest challenge';
-    }
-
-    // Learning style is optional - no validation needed
+    // Biggest challenge is now optional - no validation needed
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -247,7 +218,6 @@ export const Step3Component: React.FC = () => {
         knowledge_level: formData.knowledge_level,
         main_interests: formData.main_interests,
         biggest_challenge: formData.biggest_challenge,
-        learning_style: formData.learning_style,
         main_goal: undefined,
         main_question: undefined
       };

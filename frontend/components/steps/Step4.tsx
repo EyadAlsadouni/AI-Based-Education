@@ -6,7 +6,7 @@ import { Button } from '../ui/Button';
 import { Select, Textarea } from '../ui/FormElements';
 import { conditionsApi, userApi, aiApi, handleApiError } from '../../lib/api';
 import { formStorage, format, error as errorUtils } from '../../lib/utils';
-import { DEFAULT_CONDITION_GOALS } from '../../lib/constants';
+import { DEFAULT_CONDITION_GOALS, generateDynamicGoals } from '../../lib/constants';
 import { Step4FormData, UserSession } from '../../types';
 
 export const Step4Component: React.FC = () => {
@@ -23,7 +23,8 @@ export const Step4Component: React.FC = () => {
   const [customGoal, setCustomGoal] = useState('');
   const [formData, setFormData] = useState<Step4FormData>({
     main_goal: '',
-    main_question: ''
+    main_question: '',
+    learning_style: undefined
   });
 
   // Check if user has completed previous steps
@@ -61,21 +62,42 @@ export const Step4Component: React.FC = () => {
     loadSession();
   }, [router]);
 
-  // Load condition-specific goals
+  // Load dynamic goals based on user's previous choices
   useEffect(() => {
     if (!userSession?.condition_selected) return;
 
-    const loadGoals = async () => {
+    const loadGoals = () => {
       setLoadingGoals(true);
       try {
-        const goalsData = await conditionsApi.getGoals(userSession.condition_selected);
-        setAvailableGoals(goalsData.goals);
+        console.log('Step4 - User session:', userSession);
+        
+        // Get data from userSession first, then fallback to formStorage
+        const healthGoal = userSession.health_goals?.[0] || 'Education about the condition (e.g., Diabetes, Heart Health)';
+        const knowledgeLevel = userSession.knowledge_level || 'new';
+        const mainInterests = userSession.main_interests || [];
+        
+        console.log('Step4 - Using data:', { 
+          healthGoal, 
+          knowledgeLevel, 
+          mainInterests, 
+          condition: userSession.condition_selected 
+        });
+        
+        const dynamicGoals = generateDynamicGoals(
+          healthGoal,
+          userSession.condition_selected,
+          knowledgeLevel,
+          mainInterests
+        );
+        
+        console.log('Step4 - Generated goals:', dynamicGoals);
+        console.log('Step4 - Condition selected:', userSession.condition_selected);
+        setAvailableGoals(dynamicGoals);
       } catch (err) {
         errorUtils.log('Step4Component loadGoals', err);
-        // Fallback to default goals
-        const conditionKey = userSession.condition_selected.toLowerCase();
-        const defaultGoals = DEFAULT_CONDITION_GOALS[conditionKey] || DEFAULT_CONDITION_GOALS['diabetes'];
-        setAvailableGoals(defaultGoals);
+        console.error('Step4 - Error generating goals:', err);
+        // Fallback to basic goals
+        setAvailableGoals(['Learn about my condition', 'Manage my symptoms', 'Improve my health', 'Other...']);
       } finally {
         setLoadingGoals(false);
       }
@@ -137,13 +159,12 @@ export const Step4Component: React.FC = () => {
     setLoading(true);
 
     try {
-      // Update user session with goals and questions
+      // Update user session with goals, questions, and learning style
       await userApi.createSession(userId, {
         condition_selected: userSession.condition_selected,
-        diagnosis_year: userSession.diagnosis_year,
-        takes_medication: userSession.takes_medication,
-        medications: userSession.medications,
-        checks_vitals: userSession.checks_vitals,
+        knowledge_level: userSession.knowledge_level,
+        main_interests: userSession.main_interests,
+        biggest_challenge: userSession.biggest_challenge,
         ...formData
       });
 
@@ -225,11 +246,11 @@ export const Step4Component: React.FC = () => {
                 <span className="text-blue-600 font-bold">4</span>
               </div>
               <h2 className="text-xl font-semibold text-blue-900">
-                Goals & Personalization
+                Goals & Learning Preferences
               </h2>
             </div>
             <p className="text-blue-700">
-              Share your health goals and questions to receive personalized {condition} education.
+              Share your health goals, questions, and learning preferences to receive personalized {condition} education.
             </p>
           </div>
         </div>
@@ -246,9 +267,10 @@ export const Step4Component: React.FC = () => {
           {/* Main Goal Selection */}
           <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-4">
-              What is your main goal right now?
+              What's your main goal right now?
               <span className="text-red-500 ml-1">*</span>
             </label>
+            <p className="text-sm text-gray-600 mb-4">Choose the most important thing you want to achieve:</p>
             
             {loadingGoals ? (
               <div className="flex items-center justify-center p-8">
@@ -297,13 +319,57 @@ export const Step4Component: React.FC = () => {
           {/* Main Question */}
           <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
             <Textarea
-              label={`What is your biggest question about ${condition}?`}
-              placeholder={`e.g., "What can I eat for breakfast that won't spike my blood sugar?" or "How often should I exercise?"`}
+              label={`What's your biggest question about ${condition}?`}
+              placeholder={`e.g., "How do I use my inhaler correctly?" or "What should I do during a panic attack?"`}
               value={formData.main_question || ''}
               onChange={(e) => updateFormData('main_question', e.target.value)}
-              rows={4}
-              hint="Optional - This helps us provide more personalized information"
+              rows={3}
+              hint="Optional - Any specific question you'd like answered?"
             />
+          </div>
+
+          {/* Learning Style Preference */}
+          <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+            <h4 className="text-lg font-medium text-gray-900 mb-4">
+              How do you prefer to learn?
+              <span className="text-gray-500 ml-1">(Optional)</span>
+            </h4>
+            <p className="text-sm text-gray-600 mb-4">This helps us show you information in your preferred format:</p>
+            <div className="space-y-3">
+              <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="radio"
+                  name="learning_style"
+                  value="quick_tips"
+                  checked={formData.learning_style === 'quick_tips'}
+                  onChange={() => updateFormData('learning_style', 'quick_tips')}
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700 leading-5">Quick tips - Short, easy-to-read information</span>
+              </label>
+              <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="radio"
+                  name="learning_style"
+                  value="step_by_step"
+                  checked={formData.learning_style === 'step_by_step'}
+                  onChange={() => updateFormData('learning_style', 'step_by_step')}
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700 leading-5">Step-by-step guides - Detailed instructions I can follow</span>
+              </label>
+              <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="radio"
+                  name="learning_style"
+                  value="videos"
+                  checked={formData.learning_style === 'videos'}
+                  onChange={() => updateFormData('learning_style', 'videos')}
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                />
+                <span className="text-sm text-gray-700 leading-5">Videos - Visual demonstrations and explanations</span>
+              </label>
+            </div>
           </div>
 
           {/* Example Questions */}
@@ -362,7 +428,7 @@ export const Step4Component: React.FC = () => {
               className="order-2 sm:order-1 hover:bg-gray-50"
             >
               <span className="mr-2">←</span>
-              Back to Health Assessment
+              Back to Learning Discovery
             </Button>
             
             <Button

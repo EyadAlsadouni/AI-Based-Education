@@ -43,7 +43,7 @@ export interface UserSession {
   takes_medication: boolean;
   medications?: string[];
   checks_vitals: 'Yes, regularly' | 'Yes, occasionally' | 'No';
-  main_goal?: string;
+  main_goal?: string[];
   main_question?: string;
   ai_response?: string;
   created_at: string;
@@ -71,7 +71,7 @@ export interface Step3FormData {
 
 // Step 4 form data (goals and questions)
 export interface Step4FormData {
-  main_goal: string;
+  main_goal: string[];
   main_question?: string;
   learning_style?: 'quick_tips' | 'step_by_step' | 'videos';
 }

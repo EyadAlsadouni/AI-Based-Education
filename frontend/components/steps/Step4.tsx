@@ -22,7 +22,7 @@ export const Step4Component: React.FC = () => {
   const [showCustomGoal, setShowCustomGoal] = useState(false);
   const [customGoal, setCustomGoal] = useState('');
   const [formData, setFormData] = useState<Step4FormData>({
-    main_goal: '',
+    main_goal: [],
     main_question: '',
     learning_style: undefined
   });
@@ -46,9 +46,24 @@ export const Step4Component: React.FC = () => {
         const savedData = formStorage.getFormData<Partial<Step4FormData>>();
         if (savedData) {
           setFormData(prev => ({ ...prev, ...savedData }));
-          if (savedData.main_goal && !DEFAULT_CONDITION_GOALS[session.condition_selected.toLowerCase()]?.includes(savedData.main_goal)) {
-            setShowCustomGoal(true);
-            setCustomGoal(savedData.main_goal);
+          // Handle both old string format and new array format
+          if (savedData.main_goal) {
+            if (typeof savedData.main_goal === 'string') {
+              // Convert old string format to array
+              const goalArray = [savedData.main_goal];
+              setFormData(prev => ({ ...prev, main_goal: goalArray }));
+              if (!DEFAULT_CONDITION_GOALS[session.condition_selected.toLowerCase()]?.includes(savedData.main_goal)) {
+                setShowCustomGoal(true);
+                setCustomGoal(savedData.main_goal);
+              }
+            } else if (Array.isArray(savedData.main_goal)) {
+              // Check if any goals are custom
+              const customGoals = savedData.main_goal.filter(goal => !DEFAULT_CONDITION_GOALS[session.condition_selected.toLowerCase()]?.includes(goal));
+              if (customGoals.length > 0) {
+                setShowCustomGoal(true);
+                setCustomGoal(customGoals[0]); // Show first custom goal
+              }
+            }
           }
         }
       } catch (err) {
@@ -117,32 +132,77 @@ export const Step4Component: React.FC = () => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
     }
+    
+    // Real-time validation for main question
+    if (field === 'main_question' && value && value.trim().length > 0) {
+      if (containsMedicalAdvice(value)) {
+        setErrors(prev => ({ 
+          ...prev, 
+          main_question: 'Please ask educational questions about your condition, not medical advice. Avoid questions about medications, treatments, or symptoms that require a doctor.' 
+        }));
+      } else {
+        setErrors(prev => ({ ...prev, main_question: undefined }));
+      }
+    }
   };
 
-  const handleGoalChange = (selectedGoal: string) => {
+  const handleGoalChange = (selectedGoal: string, checked: boolean) => {
     if (selectedGoal === 'Other...') {
-      setShowCustomGoal(true);
-      updateFormData('main_goal', customGoal);
+      if (checked) {
+        setShowCustomGoal(true);
+        setCustomGoal('');
+      } else {
+        setShowCustomGoal(false);
+        setCustomGoal('');
+        updateFormData('main_goal', formData.main_goal.filter(g => g !== 'Other...'));
+      }
     } else {
-      setShowCustomGoal(false);
-      setCustomGoal('');
-      updateFormData('main_goal', selectedGoal);
+      const newGoals = checked 
+        ? [...formData.main_goal, selectedGoal]
+        : formData.main_goal.filter(g => g !== selectedGoal);
+      updateFormData('main_goal', newGoals);
     }
   };
 
   const handleCustomGoalChange = (value: string) => {
     setCustomGoal(value);
     if (showCustomGoal) {
-      updateFormData('main_goal', value);
+      // Replace any existing "Other..." with the custom goal
+      const otherGoals = formData.main_goal.filter(g => g !== 'Other...');
+      updateFormData('main_goal', [...otherGoals, value]);
     }
+  };
+
+  // Function to check if question contains medical advice requests
+  const containsMedicalAdvice = (question: string): boolean => {
+    const medicalAdviceKeywords = [
+      'medication', 'medicine', 'drug', 'prescription', 'dosage', 'dose',
+      'should i take', 'can i take', 'is it safe', 'side effects',
+      'treatment', 'therapy', 'cure', 'heal', 'fix', 'solve',
+      'diagnose', 'diagnosis', 'symptoms', 'signs', 'test results',
+      'emergency', 'urgent', 'serious', 'dangerous', 'harmful',
+      'doctor', 'physician', 'specialist', 'medical advice',
+      'what should i do', 'what can i do', 'how to treat',
+      'is this normal', 'is this bad', 'should i worry'
+    ];
+    
+    const lowerQuestion = question.toLowerCase();
+    return medicalAdviceKeywords.some(keyword => lowerQuestion.includes(keyword));
   };
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof Step4FormData, string>> = {};
 
     // Validate main goal
-    if (!formData.main_goal || formData.main_goal.trim().length === 0) {
-      newErrors.main_goal = 'Please select or enter your main goal';
+    if (formData.main_goal.length === 0) {
+      newErrors.main_goal = 'Please select at least one goal';
+    }
+
+    // Validate main question for medical advice
+    if (formData.main_question && formData.main_question.trim().length > 0) {
+      if (containsMedicalAdvice(formData.main_question)) {
+        newErrors.main_question = 'Please ask educational questions about your condition, not medical advice. Avoid questions about medications, treatments, or symptoms that require a doctor.';
+      }
     }
 
     setErrors(newErrors);
@@ -267,10 +327,17 @@ export const Step4Component: React.FC = () => {
           {/* Main Goal Selection */}
           <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-4">
-              What's your main goal right now?
+              What are your main goals right now?
               <span className="text-red-500 ml-1">*</span>
             </label>
-            <p className="text-sm text-gray-600 mb-4">Choose the most important thing you want to achieve:</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Select all that apply - you can choose multiple goals
+              {formData.main_goal.length > 0 && (
+                <span className="ml-2 text-blue-600 font-medium">
+                  ({formData.main_goal.length} selected)
+                </span>
+              )}
+            </p>
             
             {loadingGoals ? (
               <div className="flex items-center justify-center p-8">
@@ -281,12 +348,12 @@ export const Step4Component: React.FC = () => {
                 {availableGoals.map((goal) => (
                   <label key={goal} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                     <input
-                      type="radio"
+                      type="checkbox"
                       name="main_goal"
                       value={goal}
-                      checked={!showCustomGoal && formData.main_goal === goal}
-                      onChange={() => handleGoalChange(goal)}
-                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                      checked={formData.main_goal.includes(goal)}
+                      onChange={(e) => handleGoalChange(goal, e.target.checked)}
+                      className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
                     <span className="text-sm text-gray-700 leading-5 font-medium">{goal}</span>
                   </label>
@@ -320,12 +387,27 @@ export const Step4Component: React.FC = () => {
           <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
             <Textarea
               label={`What's your biggest question about ${condition}?`}
-              placeholder={`e.g., "How do I use my inhaler correctly?" or "What should I do during a panic attack?"`}
+              placeholder={`e.g., "How do I use my inhaler correctly?" or "What foods help with my condition?"`}
               value={formData.main_question || ''}
               onChange={(e) => updateFormData('main_question', e.target.value)}
               rows={3}
-              hint="Optional - Any specific question you'd like answered?"
+              hint="Optional - Ask educational questions about your condition. Avoid medical advice questions."
+              error={errors.main_question}
+              className={formData.main_question && containsMedicalAdvice(formData.main_question) ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}
             />
+            
+            {/* Helpful guidance */}
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  <span className="text-blue-600 text-lg">💡</span>
+                </div>
+                <div>
+                  <h5 className="text-sm font-medium text-blue-900 mb-1">Ask educational questions about your condition</h5>
+                  <p className="text-sm text-blue-800">Focus on learning how to manage your condition, not medical advice that requires a doctor.</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Learning Style Preference */}
@@ -372,51 +454,6 @@ export const Step4Component: React.FC = () => {
             </div>
           </div>
 
-          {/* Example Questions */}
-          <div className="p-6 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-blue-600 text-xs">❓</span>
-              </div>
-              <h3 className="text-sm font-medium text-gray-900">
-                Common questions about {condition}:
-              </h3>
-            </div>
-            <ul className="text-sm text-gray-700 space-y-2 ml-9">
-              {condition === 'Diabetes' && (
-                <>
-                  <li>• "What foods should I avoid?"</li>
-                  <li>• "How do I count carbohydrates?"</li>
-                  <li>• "What should my blood sugar levels be?"</li>
-                  <li>• "How often should I check my glucose?"</li>
-                </>
-              )}
-              {condition === 'Heart Health' && (
-                <>
-                  <li>• "What exercises are safe for my heart?"</li>
-                  <li>• "How can I lower my cholesterol naturally?"</li>
-                  <li>• "What foods are heart-healthy?"</li>
-                  <li>• "How do I manage stress for better heart health?"</li>
-                </>
-              )}
-              {condition === 'Pre-Procedure Prep' && (
-                <>
-                  <li>• "How should I prepare for my procedure?"</li>
-                  <li>• "What should I expect during recovery?"</li>
-                  <li>• "What medications should I stop before the procedure?"</li>
-                  <li>• "How can I manage pre-procedure anxiety?"</li>
-                </>
-              )}
-              {condition === 'Mental Wellness' && (
-                <>
-                  <li>• "How can I manage my anxiety daily?"</li>
-                  <li>• "What are healthy coping strategies?"</li>
-                  <li>• "How important is sleep for mental health?"</li>
-                  <li>• "When should I seek additional help?"</li>
-                </>
-              )}
-            </ul>
-          </div>
 
           {/* Navigation Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6 border-t border-gray-200">

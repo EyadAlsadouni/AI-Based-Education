@@ -27,17 +27,22 @@ User Context:
 - Takes Medication: ${userData.takes_medication ? 'Yes' : 'No'}
 - Medications: ${userData.medications || 'None specified'}
 - Checks Vitals: ${userData.checks_vitals || 'Not specified'}
-- Main Goal: ${userData.main_goal || 'Not specified'}
+- Main Goals: ${userData.main_goal ? userData.main_goal.join(', ') : 'Not specified'}
 - Main Question: ${userData.main_question || 'Not specified'}
+${userData.main_question && userData.main_question.includes('medication') ? 'NOTE: User asked about medications - provide educational info only, redirect to doctor for medical advice' : ''}
 
 IMPORTANT GUIDELINES:
-1. Provide educational information only - never give medical advice
-2. Always recommend consulting healthcare providers for medical decisions
-3. Be empathetic, supportive, and encouraging
-4. Use simple, clear language appropriate for patient education
-5. Focus on evidence-based information
-6. Be specific to their condition and goals
-7. Provide actionable, practical advice when appropriate
+1. Provide educational information only - NEVER give medical advice
+2. NEVER recommend specific medications, dosages, or treatments
+3. NEVER diagnose symptoms or interpret test results
+4. NEVER suggest when to seek emergency care (direct to 911/emergency services)
+5. Always recommend consulting healthcare providers for medical decisions
+6. Be empathetic, supportive, and encouraging
+7. Use simple, clear language appropriate for patient education
+8. Focus on evidence-based information
+9. Be specific to their condition and goals
+10. Provide actionable, practical advice when appropriate
+11. If user asks medical advice questions, redirect them to consult their doctor
 
 Your responses should be structured to help create 4 educational cards:
 1. Diagnosis Basics - Core knowledge about their condition
@@ -230,7 +235,7 @@ router.post('/generate-dashboard', async (req, res) => {
           user_context: {
             name: userData.full_name,
             condition: userData.condition_selected,
-            main_goal: userData.main_goal
+            main_goals: userData.main_goal
           }
         });
 
@@ -256,7 +261,7 @@ router.post('/generate-dashboard', async (req, res) => {
           user_context: {
             name: userData.full_name,
             condition: userData.condition_selected,
-            main_goal: userData.main_goal
+            main_goals: userData.main_goal
           },
           note: 'Using fallback content due to AI service limitations'
         });

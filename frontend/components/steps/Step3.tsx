@@ -3,152 +3,149 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '../ui/Button';
-import { Input, Select } from '../ui/FormElements';
-import { medicationsApi, userApi, handleApiError } from '../../lib/api';
+import { Input } from '../ui/FormElements';
+import { userApi, handleApiError } from '../../lib/api';
 import { formStorage, format, error as errorUtils } from '../../lib/utils';
-import { VITALS_OPTIONS, DEFAULT_MEDICATIONS } from '../../lib/constants';
-import { Step3FormData, Medication, UserSession } from '../../types';
+import { STEP3_QUESTIONS } from '../../lib/constants';
+import { Step3FormData, UserSession } from '../../types';
 
-interface MedicationSearchProps {
-  selectedCondition: string;
-  selectedMedications: string[];
-  onMedicationsChange: (medications: string[]) => void;
-  error?: string;
+interface LearningDiscoveryProps {
+  condition: string;
+  formData: Step3FormData;
+  onFormDataChange: (field: keyof Step3FormData, value: any) => void;
+  errors: Partial<Record<keyof Step3FormData, string>>;
 }
 
-const MedicationSearch: React.FC<MedicationSearchProps> = ({
-  selectedCondition,
-  selectedMedications,
-  onMedicationsChange,
-  error
+const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
+  condition,
+  formData,
+  onFormDataChange,
+  errors
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [medications, setMedications] = useState<Medication[]>([]);
-  const [filteredMedications, setFilteredMedications] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
+  const questions = STEP3_QUESTIONS[condition];
+  
+  if (!questions) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-600">Questions not available for this condition.</p>
+      </div>
+    );
+  }
 
-  // Load medications on mount
-  useEffect(() => {
-    const loadMedications = async () => {
-      setLoading(true);
-      try {
-        const data = await medicationsApi.getAll();
-        setMedications(data);
-      } catch (err) {
-        errorUtils.log('MedicationSearch loadMedications', err);
-        // Fallback to default medications
-        const defaultMeds = DEFAULT_MEDICATIONS.map((name, index) => ({
-          id: index + 1,
-          name,
-          description: '',
-          condition_category: ''
-        }));
-        setMedications(defaultMeds);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadMedications();
-  }, []);
-
-  // Filter medications based on search query
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredMedications([]);
-      setShowDropdown(false);
-      return;
-    }
-
-    const filtered = medications
-      .filter(med => 
-        med.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !selectedMedications.includes(med.name)
-      )
-      .map(med => med.name)
-      .slice(0, 10);
-
-    setFilteredMedications(filtered);
-    setShowDropdown(filtered.length > 0);
-  }, [searchQuery, medications, selectedMedications]);
-
-  const handleMedicationSelect = (medicationName: string) => {
-    if (!selectedMedications.includes(medicationName)) {
-      onMedicationsChange([...selectedMedications, medicationName]);
-    }
-    setSearchQuery('');
-    setShowDropdown(false);
-  };
-
-  const handleMedicationRemove = (medicationName: string) => {
-    onMedicationsChange(selectedMedications.filter(name => name !== medicationName));
+  const handleInterestChange = (interest: string, checked: boolean) => {
+    const updatedInterests = checked
+      ? [...formData.main_interests, interest]
+      : formData.main_interests.filter(i => i !== interest);
+    
+    onFormDataChange('main_interests', updatedInterests);
   };
 
   return (
-    <div className="space-y-3">
-      <label className="block text-sm font-medium text-gray-700">
-        Search for your medication...
-      </label>
-      
-      {/* Selected medications */}
-      {selectedMedications.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm text-gray-600">Selected medications:</p>
+    <div className="space-y-8">
+      {/* Knowledge Level */}
+      <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+        <h4 className="text-lg font-medium text-gray-900 mb-4">
+          {questions.knowledgeLevel.question}
+          <span className="text-red-500 ml-1">*</span>
+        </h4>
+        <div className="space-y-3">
+          {questions.knowledgeLevel.options.map((option) => (
+            <label key={option.value} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <input
+                type="radio"
+                name="knowledge_level"
+                value={option.value}
+                checked={formData.knowledge_level === option.value}
+                onChange={() => onFormDataChange('knowledge_level', option.value)}
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+              />
+              <span className="text-sm text-gray-700 leading-5">{option.label}</span>
+            </label>
+          ))}
+        </div>
+        {errors.knowledge_level && (
+          <p className="text-sm text-red-600 mt-2">{errors.knowledge_level}</p>
+        )}
+      </div>
+
+      {/* Main Interests */}
+      <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+        <h4 className="text-lg font-medium text-gray-900 mb-4">
+          {questions.mainInterests.question}
+          <span className="text-red-500 ml-1">*</span>
+        </h4>
+        <p className="text-sm text-gray-600 mb-4">Select up to 3 areas that interest you most:</p>
+        <div className="space-y-3">
+          {questions.mainInterests.options.map((option) => (
+            <label key={option.value} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                checked={formData.main_interests.includes(option.value)}
+                onChange={(e) => handleInterestChange(option.value, e.target.checked)}
+                disabled={!formData.main_interests.includes(option.value) && formData.main_interests.length >= 3}
+              />
+              <span className="text-sm text-gray-700 leading-5">{option.label}</span>
+            </label>
+          ))}
+        </div>
+        {errors.main_interests && (
+          <p className="text-sm text-red-600 mt-2">{errors.main_interests}</p>
+        )}
+      </div>
+
+      {/* Biggest Challenge */}
+      <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+        <h4 className="text-lg font-medium text-gray-900 mb-4">
+          {questions.biggestChallenge.question}
+          <span className="text-red-500 ml-1">*</span>
+        </h4>
+        <Input
+          type="text"
+          placeholder={questions.biggestChallenge.placeholder}
+          value={formData.biggest_challenge}
+          onChange={(e) => onFormDataChange('biggest_challenge', e.target.value)}
+          error={errors.biggest_challenge}
+          required
+        />
+        <div className="mt-3">
+          <p className="text-sm text-gray-600 mb-2">Here are some examples:</p>
           <div className="flex flex-wrap gap-2">
-            {selectedMedications.map((medication) => (
+            {questions.biggestChallenge.examples.map((example, index) => (
               <span
-                key={medication}
-                className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                key={index}
+                className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
               >
-                {medication}
-                <button
-                  type="button"
-                  onClick={() => handleMedicationRemove(medication)}
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                >
-                  ×
-                </button>
+                {example}
               </span>
             ))}
           </div>
         </div>
-      )}
-
-      {/* Search input */}
-      <div className="relative">
-        <input
-          type="text"
-          className={`block w-full rounded-md border px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-blue-500 ${
-            error ? 'border-red-500' : 'border-gray-300'
-          }`}
-          placeholder="Type to search medications (e.g., Metformin, Insulin Glargine, etc.)"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onFocus={() => searchQuery && setShowDropdown(filteredMedications.length > 0)}
-          disabled={loading}
-        />
-
-        {/* Dropdown */}
-        {showDropdown && (
-          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-            {filteredMedications.map((medication) => (
-              <button
-                key={medication}
-                type="button"
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
-                onClick={() => handleMedicationSelect(medication)}
-              >
-                {medication}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600">{error}</p>
-      )}
+      {/* Learning Style (Optional) */}
+      <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+        <h4 className="text-lg font-medium text-gray-900 mb-4">
+          {questions.learningStyle.question}
+          <span className="text-gray-500 ml-1">(Optional)</span>
+        </h4>
+        <p className="text-sm text-gray-600 mb-4">This helps us show you information in your preferred format:</p>
+        <div className="space-y-3">
+          {questions.learningStyle.options.map((option) => (
+            <label key={option.value} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <input
+                type="radio"
+                name="learning_style"
+                value={option.value}
+                checked={formData.learning_style === option.value}
+                onChange={() => onFormDataChange('learning_style', option.value)}
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+              />
+              <span className="text-sm text-gray-700 leading-5">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
@@ -161,10 +158,10 @@ export const Step3Component: React.FC = () => {
   const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [formData, setFormData] = useState<Step3FormData>({
-    diagnosis_year: undefined,
-    takes_medication: false,
-    medications: [],
-    checks_vitals: 'No'
+    knowledge_level: 'new',
+    main_interests: [],
+    biggest_challenge: '',
+    learning_style: undefined
   });
 
   // Check if user has completed previous steps
@@ -214,13 +211,22 @@ export const Step3Component: React.FC = () => {
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof Step3FormData, string>> = {};
 
-    // Validate diagnosis year if provided
-    if (formData.diagnosis_year) {
-      const currentYear = new Date().getFullYear();
-      if (formData.diagnosis_year < 1900 || formData.diagnosis_year > currentYear) {
-        newErrors.diagnosis_year = `Please enter a valid year between 1900 and ${currentYear}`;
-      }
+    // Validate knowledge level (required)
+    if (!formData.knowledge_level) {
+      newErrors.knowledge_level = 'Please select your knowledge level';
     }
+
+    // Validate main interests (required)
+    if (formData.main_interests.length === 0) {
+      newErrors.main_interests = 'Please select at least one area of interest';
+    }
+
+    // Validate biggest challenge (required)
+    if (!formData.biggest_challenge.trim()) {
+      newErrors.biggest_challenge = 'Please tell us about your biggest challenge';
+    }
+
+    // Learning style is optional - no validation needed
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -230,7 +236,6 @@ export const Step3Component: React.FC = () => {
     e.preventDefault();
     
     if (!validateForm() || !userId) {
-      console.log('Validation failed or no userId:', { validateForm: validateForm(), userId });
       return;
     }
 
@@ -239,34 +244,23 @@ export const Step3Component: React.FC = () => {
     try {
       const submitData = {
         condition_selected: userSession?.condition_selected || '',
-        diagnosis_year: formData.diagnosis_year || undefined,
-        takes_medication: formData.takes_medication,
-        medications: formData.medications,
-        checks_vitals: formData.checks_vitals,
+        knowledge_level: formData.knowledge_level,
+        main_interests: formData.main_interests,
+        biggest_challenge: formData.biggest_challenge,
+        learning_style: formData.learning_style,
         main_goal: undefined,
         main_question: undefined
       };
       
-      console.log('Submitting Step 3 data:', submitData);
-      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
-      
-      // Update user session with quiz data
-      const response = await userApi.createSession(userId, submitData);
-      
-      console.log('Step 3 submission response:', response);
+      // Update user session with learning discovery data
+      await userApi.createSession(userId, submitData);
 
       formStorage.saveCurrentStep(4);
       router.push('/step-4');
     } catch (err: any) {
-      console.error('Step 3 submission error:', err);
-      console.error('Error details:', {
-        message: err?.message,
-        response: err?.response?.data,
-        status: err?.response?.status
-      });
       const errorMessage = handleApiError(err);
       errorUtils.log('Step3Component handleSubmit', err);
-      setErrors({ diagnosis_year: errorMessage });
+      setErrors({ biggest_challenge: errorMessage });
     } finally {
       setLoading(false);
     }
@@ -299,7 +293,7 @@ export const Step3Component: React.FC = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
         <div className="text-center">
           <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-blue-600 text-2xl">🏥</span>
+            <span className="text-blue-600 text-2xl">🎯</span>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-3">
             AI-Based Patient Education Platform
@@ -313,102 +307,43 @@ export const Step3Component: React.FC = () => {
                 <span className="text-blue-600 font-bold">3</span>
               </div>
               <h2 className="text-xl font-semibold text-blue-900">
-                Health Assessment - {condition}
+                Learning Needs Discovery - {condition}
               </h2>
             </div>
             <p className="text-blue-700">
-              Welcome, {firstName}! Help us understand your {condition} management routine.
+              Welcome, {firstName}! Help us understand what you'd like to learn about {condition}.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Assessment Form */}
+      {/* Learning Discovery Form */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Medical History & Current Care</h3>
-          <p className="text-gray-600">This information helps us personalize your educational content and recommendations.</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Diagnosis Year */}
-          <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-            <Input
-              label={`When were you diagnosed with ${condition}?`}
-              type="number"
-              placeholder="e.g., 2021"
-              value={formData.diagnosis_year || ''}
-              onChange={(e) => updateFormData('diagnosis_year', e.target.value ? parseInt(e.target.value) : undefined)}
-              error={errors.diagnosis_year}
-              hint="Optional - This helps us tailor information to your experience level"
-              min={1900}
-              max={new Date().getFullYear()}
-            />
-          </div>
-
-          {/* Medication Section */}
-          <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="space-y-6">
-              <div>
-                <h4 className="text-lg font-medium text-gray-900 mb-4">Medication Information</h4>
-                <fieldset>
-                  <legend className="text-sm font-medium text-gray-700 mb-3">
-                    Do you currently take any medication for {condition}?
-                  </legend>
-                  <div className="space-y-3">
-                    <label className="flex items-center space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                      <input
-                        type="radio"
-                        name="takes_medication"
-                        value="true"
-                        checked={formData.takes_medication === true}
-                        onChange={() => updateFormData('takes_medication', true)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700 font-medium">Yes, I take medication</span>
-                    </label>
-                    <label className="flex items-center space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                      <input
-                        type="radio"
-                        name="takes_medication"
-                        value="false"
-                        checked={formData.takes_medication === false}
-                        onChange={() => updateFormData('takes_medication', false)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700 font-medium">No, I don't take medication</span>
-                    </label>
-                  </div>
-                </fieldset>
-              </div>
-
-              {/* Medication Search - Only show if user takes medication */}
-              {formData.takes_medication && (
-                <div className="border-t border-gray-200 pt-6">
-                  <MedicationSearch
-                    selectedCondition={condition}
-                    selectedMedications={formData.medications}
-                    onMedicationsChange={(medications) => updateFormData('medications', medications)}
-                  />
-                </div>
-              )}
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Discover Your Learning Needs</h3>
+          <p className="text-gray-600 mb-3">This helps us create personalized educational content just for you.</p>
+          <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <div className="flex items-center space-x-1">
+              <span className="text-red-500">*</span>
+              <span>Required</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <span className="text-gray-500">(Optional)</span>
+              <span>Optional</span>
             </div>
           </div>
+        </div>
 
-          {/* Vitals Monitoring */}
-          <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-            <Select
-              label="Do you check your vitals at home?"
-              value={formData.checks_vitals}
-              onChange={(e) => updateFormData('checks_vitals', e.target.value as typeof formData.checks_vitals)}
-              options={VITALS_OPTIONS.map(option => ({ value: option, label: option }))}
-              hint="This includes blood pressure, blood sugar, weight, or other relevant measurements"
-              required
-            />
-          </div>
+        <form onSubmit={handleSubmit}>
+          <LearningDiscovery
+            condition={condition}
+            formData={formData}
+            onFormDataChange={updateFormData}
+            errors={errors}
+          />
 
           {/* Navigation Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6 border-t border-gray-200">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between pt-8 border-t border-gray-200 mt-8">
             <Button
               type="button"
               variant="outline"
@@ -447,7 +382,7 @@ export const Step3Component: React.FC = () => {
               />
             ))}
           </div>
-          <p className="text-sm text-gray-500">Step 3 of 5 - Health Assessment</p>
+          <p className="text-sm text-gray-500">Step 3 of 5 - Learning Needs Discovery</p>
         </div>
       </div>
     </div>

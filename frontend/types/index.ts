@@ -62,12 +62,12 @@ export interface Step1FormData {
   health_goals: HealthGoal[];
 }
 
-// Step 3 form data (quiz)
+// Step 3 form data (learning discovery)
 export interface Step3FormData {
-  diagnosis_year?: number;
-  takes_medication: boolean;
-  medications: string[];
-  checks_vitals: 'Yes, regularly' | 'Yes, occasionally' | 'No';
+  knowledge_level: 'new' | 'some' | 'experienced';
+  main_interests: string[];
+  biggest_challenge: string;
+  learning_style?: 'quick_tips' | 'step_by_step' | 'videos';
 }
 
 // Step 4 form data (goals and questions)

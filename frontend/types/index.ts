@@ -11,10 +11,10 @@ export interface User {
 
 // Health goals options
 export type HealthGoal = 
-  | 'Managing a condition (e.g., Diabetes, Heart Health)'
+  | 'Education about the condition (e.g., Diabetes, Heart Health)'
   | 'Preparing for a procedure (e.g., Endoscopy, Surgery)'
-  | 'Improving overall wellness'
-  | "I'm a caregiver or family member";
+  | 'How to use my medication (e.g., Insulin injection, Asthma inhaler)'
+  | 'Psychological health (panic attacks, anxiety management)';
 
 // Condition types
 export interface Condition {

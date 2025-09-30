@@ -8,7 +8,99 @@ export const HEALTH_GOALS: HealthGoal[] = [
   'Psychological health (panic attacks, anxiety management)'
 ];
 
-// Condition options for Step 2
+// Conditional condition options based on health goals
+export const CONDITIONAL_CONDITIONS: Record<string, { name: string; icon: string; description: string }[]> = {
+  'Education about the condition (e.g., Diabetes, Heart Health)': [
+    {
+      name: 'Diabetes',
+      icon: '💉',
+      description: 'Blood sugar control, diet, and diabetes care education'
+    },
+    {
+      name: 'Heart & Blood Pressure',
+      icon: '❤️',
+      description: 'Heart disease prevention and cardiovascular health education'
+    },
+    {
+      name: 'Respiratory (Asthma/COPD)',
+      icon: '🫁',
+      description: 'Asthma, COPD, and breathing condition management'
+    },
+    {
+      name: 'Digestive / Gut Health',
+      icon: '🥗',
+      description: 'Understanding and managing digestive and gut health conditions'
+    }
+  ],
+  'Preparing for a procedure (e.g., Endoscopy, Surgery)': [
+    {
+      name: 'Endoscopy / Colonoscopy',
+      icon: '🔍',
+      description: 'Preparation and recovery for digestive procedures'
+    },
+    {
+      name: 'Day Surgery (Outpatient)',
+      icon: '🏥',
+      description: 'Pre-operative preparation and post-surgery care for outpatient procedures'
+    },
+    {
+      name: 'Imaging (CT/MRI/X-ray)',
+      icon: '📷',
+      description: 'MRI, CT scans, X-rays, and other imaging tests preparation'
+    },
+    {
+      name: 'Dental Procedure / Extraction',
+      icon: '🦷',
+      description: 'Oral surgery and dental procedure preparation'
+    }
+  ],
+  'How to use my medication (e.g., Insulin injection, Asthma inhaler)': [
+    {
+      name: 'Insulin & Diabetes Medicines',
+      icon: '💉',
+      description: 'Insulin injection techniques and diabetes medication management'
+    },
+    {
+      name: 'Inhalers (Asthma/COPD)',
+      icon: '🌬️',
+      description: 'Proper inhaler use and respiratory medication techniques'
+    },
+    {
+      name: 'Blood-Pressure Medicines',
+      icon: '💊',
+      description: 'Blood pressure medication management and monitoring'
+    },
+    {
+      name: 'Cholesterol Medicines (Statins)',
+      icon: '🧬',
+      description: 'Cholesterol medication management and statin therapy'
+    }
+  ],
+  'Psychological health (panic attacks, anxiety management)': [
+    {
+      name: 'Anxiety & Panic',
+      icon: '😰',
+      description: 'Managing anxiety disorders and panic attack strategies'
+    },
+    {
+      name: 'Depression',
+      icon: '😔',
+      description: 'Understanding and coping with depression'
+    },
+    {
+      name: 'Stress & Coping',
+      icon: '🧘',
+      description: 'Stress management techniques and healthy coping methods'
+    },
+    {
+      name: 'Sleep Health',
+      icon: '😴',
+      description: 'Improving sleep quality and overall mental wellness'
+    }
+  ]
+};
+
+// Legacy condition options (for backward compatibility)
 export const CONDITIONS: { name: ConditionName; icon: string; description: string }[] = [
   {
     name: 'Diabetes',

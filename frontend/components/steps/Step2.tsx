@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '../ui/Button';
 import { conditionsApi, userApi, handleApiError } from '../../lib/api';
 import { formStorage, error as errorUtils } from '../../lib/utils';
-import { CONDITIONS } from '../../lib/constants';
-import { Condition, ConditionName } from '../../types';
+import { CONDITIONS, CONDITIONAL_CONDITIONS } from '../../lib/constants';
+import { Condition, ConditionName, Step1FormData } from '../../types';
 
 export const Step2Component: React.FC = () => {
   const router = useRouter();
@@ -16,8 +16,10 @@ export const Step2Component: React.FC = () => {
   const [selectedCondition, setSelectedCondition] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [userId, setUserId] = useState<number | null>(null);
+  const [userHealthGoals, setUserHealthGoals] = useState<string[]>([]);
+  const [availableConditions, setAvailableConditions] = useState<{ name: string; icon: string; description: string }[]>([]);
 
-  // Check if user has completed step 1
+  // Check if user has completed step 1 and load health goals
   useEffect(() => {
     const storedUserId = formStorage.getUserId();
     if (!storedUserId) {
@@ -25,9 +27,37 @@ export const Step2Component: React.FC = () => {
       return;
     }
     setUserId(storedUserId);
+
+    // Load user's health goals from Step 1
+    const savedFormData = formStorage.getFormData<Step1FormData>();
+    if (savedFormData?.health_goals) {
+      setUserHealthGoals(savedFormData.health_goals);
+    }
   }, [router]);
 
-  // Load conditions from API
+  // Determine available conditions based on health goals
+  useEffect(() => {
+    if (userHealthGoals.length === 0) return;
+
+    const conditionsToShow: { name: string; icon: string; description: string }[] = [];
+    
+    // Get conditions for each selected health goal
+    userHealthGoals.forEach(goal => {
+      if (CONDITIONAL_CONDITIONS[goal]) {
+        conditionsToShow.push(...CONDITIONAL_CONDITIONS[goal]);
+      }
+    });
+
+    // Remove duplicates based on name
+    const uniqueConditions = conditionsToShow.filter((condition, index, self) => 
+      index === self.findIndex(c => c.name === condition.name)
+    );
+
+    setAvailableConditions(uniqueConditions);
+    setLoadingConditions(false);
+  }, [userHealthGoals]);
+
+  // Load conditions from API (fallback)
   useEffect(() => {
     const loadConditions = async () => {
       try {
@@ -42,13 +72,14 @@ export const Step2Component: React.FC = () => {
           icon: cond.icon,
           description: cond.description
         })));
-      } finally {
-        setLoadingConditions(false);
       }
     };
 
-    loadConditions();
-  }, []);
+    // Only load from API if no health goals are available
+    if (userHealthGoals.length === 0) {
+      loadConditions();
+    }
+  }, [userHealthGoals]);
 
   // Load saved selection
   useEffect(() => {
@@ -114,6 +145,33 @@ export const Step2Component: React.FC = () => {
     );
   }
 
+  if (availableConditions.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-yellow-600 text-2xl">⚠️</span>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              No Conditions Available
+            </h2>
+            <p className="text-gray-600 mb-6">
+              We couldn't find any conditions matching your health goals. Please go back and select different health goals.
+            </p>
+            <Button
+              onClick={handleBack}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <span className="mr-2">←</span>
+              Back to Patient Information
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       {/* Header Section */}
@@ -153,9 +211,9 @@ export const Step2Component: React.FC = () => {
 
         {/* Condition Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {conditions.map((condition) => (
+          {availableConditions.map((condition, index) => (
             <button
-              key={condition.id}
+              key={`${condition.name}-${index}`}
               className={`p-6 rounded-lg border-2 transition-all duration-200 text-left hover:shadow-md medical-card ${
                 selectedCondition === condition.name
                   ? 'border-blue-500 bg-blue-50 shadow-md'

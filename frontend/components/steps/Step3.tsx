@@ -109,15 +109,17 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
           error={errors.biggest_challenge}
         />
         <div className="mt-3">
-          <p className="text-sm text-gray-600 mb-2">Here are some examples:</p>
+          <p className="text-sm text-gray-600 mb-2">Here are some examples (click to add):</p>
           <div className="flex flex-wrap gap-2">
             {questions.biggestChallenge.examples.map((example, index) => (
-              <span
+              <button
                 key={index}
-                className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                type="button"
+                onClick={() => onFormDataChange('biggest_challenge', formData.biggest_challenge + (formData.biggest_challenge ? ', ' : '') + example)}
+                className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full hover:bg-blue-200 transition-colors cursor-pointer"
               >
                 {example}
-              </span>
+              </button>
             ))}
           </div>
         </div>

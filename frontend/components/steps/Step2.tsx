@@ -84,8 +84,17 @@ export const Step2Component: React.FC = () => {
   // Load saved selection
   useEffect(() => {
     const savedData = formStorage.getFormData<{ selectedCondition?: string }>();
+    console.log('Step2 - Loading saved selection:', savedData);
     if (savedData?.selectedCondition) {
       setSelectedCondition(savedData.selectedCondition);
+    }
+  }, []);
+
+  // Load all saved form data on mount
+  useEffect(() => {
+    const savedData = formStorage.getFormData<Step1FormData>();
+    if (savedData?.health_goals) {
+      setUserHealthGoals(savedData.health_goals);
     }
   }, []);
 

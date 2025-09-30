@@ -27,7 +27,7 @@ User Context:
 - Takes Medication: ${userData.takes_medication ? 'Yes' : 'No'}
 - Medications: ${userData.medications || 'None specified'}
 - Checks Vitals: ${userData.checks_vitals || 'Not specified'}
-- Main Goals: ${userData.main_goal ? userData.main_goal.join(', ') : 'Not specified'}
+- Main Goals: ${userData.main_goal ? (Array.isArray(userData.main_goal) ? userData.main_goal.join(', ') : userData.main_goal) : 'Not specified'}
 - Main Question: ${userData.main_question || 'Not specified'}
 ${userData.main_question && userData.main_question.includes('medication') ? 'NOTE: User asked about medications - provide educational info only, redirect to doctor for medical advice' : ''}
 
@@ -235,7 +235,7 @@ router.post('/generate-dashboard', async (req, res) => {
           user_context: {
             name: userData.full_name,
             condition: userData.condition_selected,
-            main_goals: userData.main_goal
+            main_goals: Array.isArray(userData.main_goal) ? userData.main_goal : [userData.main_goal]
           }
         });
 
@@ -261,7 +261,7 @@ router.post('/generate-dashboard', async (req, res) => {
           user_context: {
             name: userData.full_name,
             condition: userData.condition_selected,
-            main_goals: userData.main_goal
+            main_goals: Array.isArray(userData.main_goal) ? userData.main_goal : [userData.main_goal]
           },
           note: 'Using fallback content due to AI service limitations'
         });

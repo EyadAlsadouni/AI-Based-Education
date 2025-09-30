@@ -1278,6 +1278,38 @@ const CONDITION_SPECIFIC_GOALS: Record<string, string[]> = {
     'Understand the connection between sleep and health',
     'Create a relaxing bedtime routine',
     'Feel more rested and energized'
+  ],
+  'Dental Procedure / Extraction': [
+    'Prepare properly for my dental procedure',
+    'Manage pre-procedure anxiety',
+    'Understand what to expect during the procedure',
+    'Learn proper post-procedure care',
+    'Manage pain and discomfort after the procedure',
+    'Follow diet restrictions correctly'
+  ],
+  'Endoscopy / Colonoscopy': [
+    'Prepare properly for my endoscopy',
+    'Follow pre-procedure diet guidelines',
+    'Understand what to expect during the procedure',
+    'Learn about post-procedure recovery',
+    'Manage any discomfort after the procedure',
+    'Understand my test results'
+  ],
+  'Day Surgery (Outpatient)': [
+    'Prepare for my day surgery',
+    'Follow pre-surgery instructions',
+    'Understand the recovery process',
+    'Manage post-surgery pain',
+    'Know when to call my doctor',
+    'Return to normal activities safely'
+  ],
+  'Imaging (CT/MRI/X-ray)': [
+    'Prepare properly for my imaging test',
+    'Understand what the test involves',
+    'Manage anxiety about the procedure',
+    'Know how to prepare my body',
+    'Understand my test results',
+    'Follow post-procedure instructions'
   ]
 };
 

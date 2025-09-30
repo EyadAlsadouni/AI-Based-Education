@@ -86,14 +86,21 @@ export const formStorage = {
     return userId ? parseInt(userId, 10) : null;
   },
 
-  // Save form data
+  // Save form data (merge with existing data)
   saveFormData: (data: any): void => {
-    storage.setJSON(STORAGE_KEYS.FORM_DATA, data);
+    const existingData = storage.getJSON(STORAGE_KEYS.FORM_DATA) || {};
+    const mergedData = { ...existingData, ...data };
+    storage.setJSON(STORAGE_KEYS.FORM_DATA, mergedData);
   },
 
   // Get form data
   getFormData: <T>(): T | null => {
     return storage.getJSON<T>(STORAGE_KEYS.FORM_DATA);
+  },
+
+  // Save specific step data (for individual step saving)
+  saveStepData: (stepData: any): void => {
+    storage.setJSON(STORAGE_KEYS.FORM_DATA, stepData);
   },
 
   // Clear all stored data

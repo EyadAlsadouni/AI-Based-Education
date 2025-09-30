@@ -84,19 +84,12 @@ export const Step4Component: React.FC = () => {
     const loadGoals = () => {
       setLoadingGoals(true);
       try {
-        console.log('Step4 - User session:', userSession);
         
         // Get data from userSession first, then fallback to formStorage
         const healthGoal = userSession.health_goals?.[0] || 'Education about the condition (e.g., Diabetes, Heart Health)';
         const knowledgeLevel = userSession.knowledge_level || 'new';
         const mainInterests = userSession.main_interests || [];
         
-        console.log('Step4 - Using data:', { 
-          healthGoal, 
-          knowledgeLevel, 
-          mainInterests, 
-          condition: userSession.condition_selected 
-        });
         
         const dynamicGoals = generateDynamicGoals(
           healthGoal,
@@ -105,8 +98,6 @@ export const Step4Component: React.FC = () => {
           mainInterests
         );
         
-        console.log('Step4 - Generated goals:', dynamicGoals);
-        console.log('Step4 - Condition selected:', userSession.condition_selected);
         setAvailableGoals(dynamicGoals);
       } catch (err) {
         errorUtils.log('Step4Component loadGoals', err);

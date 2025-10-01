@@ -33,9 +33,22 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
   }
 
   const handleInterestChange = (interest: string, checked: boolean) => {
-    const updatedInterests = checked
-      ? [...formData.main_interests, interest]
-      : formData.main_interests.filter(i => i !== interest);
+    let updatedInterests;
+    
+    if (interest === 'other') {
+      // Handle "Other" option specially
+      if (checked) {
+        updatedInterests = [...formData.main_interests, 'other'];
+      } else {
+        updatedInterests = formData.main_interests.filter(i => i !== 'other');
+        // Clear the custom other text when unchecking
+        onFormDataChange('other_knowledge', '');
+      }
+    } else {
+      updatedInterests = checked
+        ? [...formData.main_interests, interest]
+        : formData.main_interests.filter(i => i !== interest);
+    }
     
     onFormDataChange('main_interests', updatedInterests);
   };
@@ -77,16 +90,35 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
         <p className="text-sm text-gray-600 mb-4">Select up to 3 areas that interest you most:</p>
         <div className="space-y-3">
           {questions.mainInterests.options.map((option) => (
-            <label key={option.value} className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                checked={formData.main_interests.includes(option.value)}
-                onChange={(e) => handleInterestChange(option.value, e.target.checked)}
-                disabled={!formData.main_interests.includes(option.value) && formData.main_interests.length >= 3}
-              />
-              <span className="text-sm text-gray-700 leading-5">{option.label}</span>
-            </label>
+            <div key={option.value}>
+              <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  checked={formData.main_interests.includes(option.value)}
+                  onChange={(e) => handleInterestChange(option.value, e.target.checked)}
+                  disabled={!formData.main_interests.includes(option.value) && formData.main_interests.length >= 3}
+                />
+                <span className="text-sm text-gray-700 leading-5">{option.label}</span>
+              </label>
+              
+              {/* Show text input for "Other" option */}
+              {option.value === 'other' && formData.main_interests.includes('other') && (
+                <div className="mt-2 ml-7">
+                  <Input
+                    type="text"
+                    placeholder="Please specify what you know about this topic..."
+                    value={formData.other_knowledge || ''}
+                    onChange={(e) => onFormDataChange('other_knowledge', e.target.value)}
+                    error={errors.other_knowledge}
+                    className="text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Please describe your specific knowledge related to this condition.
+                  </p>
+                </div>
+              )}
+            </div>
           ))}
         </div>
         {errors.main_interests && (
@@ -94,36 +126,6 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
         )}
       </div>
 
-      {/* Biggest Challenge - Now Optional */}
-      <div className="p-6 bg-gray-50 rounded-lg border border-gray-200">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">
-          {questions.biggestChallenge.question}
-          <span className="text-gray-500 ml-1">(Optional)</span>
-        </h4>
-        <p className="text-sm text-gray-600 mb-4">This helps us understand any specific challenges you're facing:</p>
-        <Input
-          type="text"
-          placeholder={questions.biggestChallenge.placeholder}
-          value={formData.biggest_challenge}
-          onChange={(e) => onFormDataChange('biggest_challenge', e.target.value)}
-          error={errors.biggest_challenge}
-        />
-        <div className="mt-3">
-          <p className="text-sm text-gray-600 mb-2">Here are some examples (click to add):</p>
-          <div className="flex flex-wrap gap-2">
-            {questions.biggestChallenge.examples.map((example, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => onFormDataChange('biggest_challenge', formData.biggest_challenge + (formData.biggest_challenge ? ', ' : '') + example)}
-                className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full hover:bg-blue-200 transition-colors cursor-pointer"
-              >
-                {example}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
 
     </div>
   );
@@ -139,7 +141,7 @@ export const Step3Component: React.FC = () => {
   const [formData, setFormData] = useState<Step3FormData>({
     knowledge_level: 'new',
     main_interests: [],
-    biggest_challenge: ''
+    other_knowledge: ''
   });
 
   // Check if user has completed previous steps
@@ -199,7 +201,10 @@ export const Step3Component: React.FC = () => {
       newErrors.main_interests = 'Please select at least one area of interest';
     }
 
-    // Biggest challenge is now optional - no validation needed
+    // Validate "Other" option - if selected, must provide details
+    if (formData.main_interests.includes('other') && (!formData.other_knowledge || formData.other_knowledge.trim().length === 0)) {
+      newErrors.other_knowledge = 'Please specify what you know about this topic';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

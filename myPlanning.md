@@ -353,3 +353,52 @@ Validation:
 - Questions are more concise and user-friendly
 - Better placeholder examples that match the specific condition selected
 
+## Step 3 & Step 4 Differentiation - January 2025
+
+### Task: Differentiate Step 3 and Step 4 options to avoid overlap
+**Objective**: Make Step 3 focus on understanding/knowledge and Step 4 focus on achieving/improving.
+
+### Completed Tasks ✅
+
+#### 1. Analyzed All Conditions for Overlap ✅
+- ✅ Systematically reviewed all Step 3 and Step 4 options
+- ✅ Identified 5 conditions with high overlap (Inhalers, Insulin, BP Meds, Cholesterol, Respiratory)
+- ✅ Confirmed other conditions already had good differentiation
+
+#### 2. Updated Step 3 Main Interests for ALL Conditions ✅
+- ✅ **Inhalers (Asthma/COPD)**: Changed to assessment-focused (what user already knows about inhalers)
+- ✅ **Insulin & Diabetes Medicines**: Changed to assessment-focused (what user already knows about diabetes meds)
+- ✅ **Blood-Pressure Medicines**: Changed to assessment-focused (what user already knows about BP meds)
+- ✅ **Cholesterol Medicines (Statins)**: Changed to assessment-focused (what user already knows about statins)
+- ✅ **Respiratory (Asthma/COPD)**: Changed to assessment-focused (what user already knows about breathing conditions)
+- ✅ **Diabetes**: Changed to assessment-focused (what user already knows about diabetes management)
+- ✅ **Heart & Blood Pressure**: Changed to assessment-focused (what user already knows about heart health)
+- ✅ **Digestive Health**: Changed to assessment-focused (what user already knows about digestive health)
+- ✅ **All Procedures**: Changed to assessment-focused (what user already knows about procedures)
+- ✅ **All Psychological Health**: Changed to assessment-focused (what user already knows about mental health)
+
+#### 3. Maintained Step 4 Goals as Achievement-Focused ✅
+- ✅ Kept Step 4 goals focused on concrete achievements and improvements
+- ✅ Goals emphasize "Master X", "Feel confident", "Reduce anxiety", "Optimize routine"
+- ✅ No changes needed to Step 4 (already well-differentiated)
+
+### Key Improvements Made:
+1. **Clear Purpose Distinction**: Step 3 = Assessment (what user already knows), Step 4 = Achieving (future goals)
+2. **Consistent Question Format**: ALL conditions now use "What aspects of X do you feel most confident about?"
+3. **Option Content**: 
+   - Step 3: "I understand how X works", "I know why Y happens", "I can recognize Z"
+   - Step 4: "Master X", "Feel confident doing Y", "Reduce Z anxiety"
+4. **No Overlap**: Each step now has distinct, complementary purposes
+5. **Assessment Focus**: Step 3 now properly assesses current knowledge level rather than asking about learning interests
+6. **User Experience Consistency**: All 16 conditions now follow the same question pattern for a cohesive experience
+
+### Documentation:
+- ✅ Created STEP3_STEP4_DIFFERENTIATION.md with before/after comparison
+- ✅ Documented key differentiation patterns for future reference
+
+### Current Status:
+- Step 3 and Step 4 now have clear, distinct purposes
+- No overlap in medication-specific conditions
+- User experience is more purposeful and logical
+- All linter checks passed
+

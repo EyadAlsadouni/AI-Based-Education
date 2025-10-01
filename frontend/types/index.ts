@@ -66,7 +66,7 @@ export interface Step1FormData {
 export interface Step3FormData {
   knowledge_level: 'new' | 'some' | 'experienced';
   main_interests: string[];
-  biggest_challenge: string;
+  other_knowledge?: string;
 }
 
 // Step 4 form data (goals and questions)

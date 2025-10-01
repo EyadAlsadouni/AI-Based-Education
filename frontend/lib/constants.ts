@@ -526,11 +526,6 @@ export const STEP3_QUESTIONS: Record<string, {
     question: string;
     options: { value: string; label: string }[];
   };
-  biggestChallenge: {
-    question: string;
-    placeholder: string;
-    examples: string[];
-  };
   learningStyle: {
     question: string;
     options: { value: string; label: string }[];
@@ -546,25 +541,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about diabetes?',
+      question: 'What aspects of diabetes management do you feel most confident about?',
       options: [
-        { value: 'blood_sugar', label: 'Blood sugar monitoring and control' },
-        { value: 'diet', label: 'Eating right and meal planning' },
-        { value: 'exercise', label: 'Safe exercise and physical activity' },
-        { value: 'medications', label: 'Understanding my diabetes medications' },
-        { value: 'daily_life', label: 'Managing diabetes in daily life' },
-        { value: 'complications', label: 'Preventing diabetes complications' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with diabetes right now?',
-      placeholder: 'e.g., "Keeping my blood sugar stable after meals" or "Remembering to check my blood sugar"',
-      examples: [
-        'Keeping blood sugar stable after meals',
-        'Remembering to check blood sugar regularly',
-        'Planning diabetes-friendly meals',
-        'Understanding when to take medications',
-        'Managing diabetes at work or social events'
+        { value: 'blood_sugar', label: 'I understand blood sugar monitoring and control' },
+        { value: 'diet', label: 'I know how to eat right and plan diabetes-friendly meals' },
+        { value: 'exercise', label: 'I understand safe exercise and physical activity with diabetes' },
+        { value: 'medications', label: 'I know my diabetes medications and how they work' },
+        { value: 'daily_life', label: 'I can manage diabetes in my daily life' },
+        { value: 'complications', label: 'I understand how to prevent diabetes complications' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about diabetes' },
+        { value: 'other', label: 'Other - I have specific knowledge about diabetes (please specify)' }
       ]
     },
     learningStyle: {
@@ -586,25 +572,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about heart health?',
+      question: 'What aspects of heart health management do you feel most confident about?',
       options: [
-        { value: 'blood_pressure', label: 'Managing blood pressure' },
-        { value: 'heart_healthy_diet', label: 'Heart-healthy eating' },
-        { value: 'safe_exercise', label: 'Safe exercise for heart health' },
-        { value: 'medications', label: 'Understanding heart medications' },
-        { value: 'stress', label: 'Managing stress and heart health' },
-        { value: 'warning_signs', label: 'Recognizing warning signs' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with heart health right now?',
-      placeholder: 'e.g., "Keeping my blood pressure under control" or "Finding time for heart-healthy exercise"',
-      examples: [
-        'Keeping blood pressure under control',
-        'Finding time for heart-healthy exercise',
-        'Understanding heart medications',
-        'Managing stress and heart health',
-        'Planning heart-healthy meals'
+        { value: 'blood_pressure', label: 'I understand blood pressure and what the numbers mean' },
+        { value: 'heart_healthy_diet', label: 'I know heart-healthy eating and meal planning' },
+        { value: 'safe_exercise', label: 'I understand safe exercise for heart health' },
+        { value: 'medications', label: 'I know my heart medications and how they work' },
+        { value: 'stress', label: 'I understand how stress affects my heart health' },
+        { value: 'warning_signs', label: 'I can recognize heart health warning signs' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about heart health' },
+        { value: 'other', label: 'Other - I have specific knowledge about heart health (please specify)' }
       ]
     },
     learningStyle: {
@@ -626,25 +603,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about breathing conditions?',
+      question: 'What aspects of managing your breathing condition do you feel most confident about?',
       options: [
-        { value: 'inhaler_use', label: 'Using inhalers correctly' },
-        { value: 'breathing_exercises', label: 'Breathing exercises and techniques' },
-        { value: 'triggers', label: 'Identifying and avoiding triggers' },
-        { value: 'medications', label: 'Understanding breathing medications' },
-        { value: 'exercise', label: 'Safe exercise with breathing conditions' },
-        { value: 'emergency', label: 'What to do in breathing emergencies' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with your breathing condition right now?',
-      placeholder: 'e.g., "Using my inhaler correctly" or "Managing breathing problems during exercise"',
-      examples: [
-        'Using inhalers correctly',
-        'Managing breathing problems during exercise',
-        'Identifying what triggers breathing problems',
-        'Remembering to take breathing medications',
-        'Dealing with breathing emergencies'
+        { value: 'how_condition_works', label: 'I understand how asthma/COPD affects my lungs and airways' },
+        { value: 'breathing_science', label: 'I know the science behind breathing difficulties' },
+        { value: 'trigger_causes', label: 'I understand why certain things trigger breathing problems' },
+        { value: 'medication_types', label: 'I know the different types of breathing medications and what they do' },
+        { value: 'exercise_physiology', label: 'I understand how exercise affects my breathing condition' },
+        { value: 'emergency_signs', label: 'I can recognize warning signs that require emergency care' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about breathing conditions' },
+        { value: 'other', label: 'Other - I have specific knowledge about breathing conditions (please specify)' }
       ]
     },
     learningStyle: {
@@ -666,25 +634,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about digestive health?',
+      question: 'What aspects of digestive health management do you feel most confident about?',
       options: [
-        { value: 'diet', label: 'Foods that help or hurt digestion' },
-        { value: 'symptoms', label: 'Understanding digestive symptoms' },
-        { value: 'medications', label: 'Managing digestive medications' },
-        { value: 'lifestyle', label: 'Lifestyle changes for better digestion' },
-        { value: 'stress', label: 'How stress affects digestion' },
-        { value: 'when_to_see_doctor', label: 'When to see a doctor' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with digestive health right now?',
-      placeholder: 'e.g., "Finding foods that don\'t upset my stomach" or "Understanding my digestive symptoms"',
-      examples: [
-        'Finding foods that don\'t upset my stomach',
-        'Understanding my digestive symptoms',
-        'Managing digestive medications',
-        'Dealing with stress and digestion',
-        'Knowing when to see a doctor'
+        { value: 'diet', label: 'I know which foods help or hurt my digestion' },
+        { value: 'symptoms', label: 'I understand my digestive symptoms and what they mean' },
+        { value: 'medications', label: 'I know how to manage my digestive medications' },
+        { value: 'lifestyle', label: 'I understand lifestyle changes for better digestion' },
+        { value: 'stress', label: 'I know how stress affects my digestion' },
+        { value: 'when_to_see_doctor', label: 'I know when to see a doctor for digestive issues' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about digestive health' },
+        { value: 'other', label: 'Other - I have specific knowledge about digestive health (please specify)' }
       ]
     },
     learningStyle: {
@@ -707,25 +666,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about diabetes medications?',
+      question: 'What aspects of diabetes medication management do you feel most confident about?',
       options: [
-        { value: 'injection_technique', label: 'Proper injection techniques' },
-        { value: 'timing', label: 'When and how often to take medications' },
-        { value: 'storage', label: 'How to store medications safely' },
-        { value: 'side_effects', label: 'Understanding side effects' },
-        { value: 'adjusting_doses', label: 'When and how to adjust doses' },
-        { value: 'emergency', label: 'What to do in emergency situations' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with diabetes medications right now?',
-      placeholder: 'e.g., "Getting the injection technique right" or "Remembering when to take my medications"',
-      examples: [
-        'Getting the injection technique right',
-        'Remembering when to take my medications',
-        'Understanding how to adjust doses',
-        'Managing side effects',
-        'Storing medications properly'
+        { value: 'how_work', label: 'I understand how insulin and diabetes medicines work in my body' },
+        { value: 'medication_types', label: 'I know the different types of diabetes medications and their purposes' },
+        { value: 'why_timing', label: 'I understand why timing matters for blood sugar control' },
+        { value: 'storage_science', label: 'I know the proper way to store my medications' },
+        { value: 'side_effects', label: 'I understand side effects and their causes' },
+        { value: 'emergency_signs', label: 'I can recognize emergency warning signs' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about diabetes medications' },
+        { value: 'other', label: 'Other - I have specific knowledge about diabetes medications (please specify)' }
       ]
     },
     learningStyle: {
@@ -747,25 +697,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about inhaler use?',
+      question: 'What aspects of inhaler use do you feel most confident about?',
       options: [
-        { value: 'proper_technique', label: 'Using inhalers correctly' },
-        { value: 'different_types', label: 'Understanding different types of inhalers' },
-        { value: 'timing', label: 'When and how often to use inhalers' },
-        { value: 'cleaning', label: 'Cleaning and maintaining inhalers' },
-        { value: 'troubleshooting', label: 'Fixing common problems' },
-        { value: 'emergency', label: 'Emergency inhaler use' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with inhaler use right now?',
-      placeholder: 'e.g., "Using my inhaler correctly" or "Remembering to use it regularly"',
-      examples: [
-        'Using my inhaler correctly',
-        'Remembering to use it regularly',
-        'Understanding when to use each type',
-        'Cleaning and maintaining it',
-        'Dealing with side effects'
+        { value: 'how_work', label: 'I understand how inhalers deliver medicine to my lungs' },
+        { value: 'medication_types', label: 'I know the different types of inhaler medications' },
+        { value: 'why_timing', label: 'I understand why timing and frequency matter' },
+        { value: 'storage_safety', label: 'I know how to store and handle inhalers safely' },
+        { value: 'side_effects', label: 'I understand side effects and when to be concerned' },
+        { value: 'when_emergency', label: 'I know when to seek emergency help vs. using my inhaler' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about inhaler use' },
+        { value: 'other', label: 'Other - I have specific knowledge about inhaler use (please specify)' }
       ]
     },
     learningStyle: {
@@ -787,25 +728,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about blood pressure medications?',
+      question: 'What aspects of blood pressure medication management do you feel most confident about?',
       options: [
-        { value: 'timing', label: 'When and how often to take medications' },
-        { value: 'side_effects', label: 'Understanding and managing side effects' },
-        { value: 'interactions', label: 'Drug interactions and food interactions' },
-        { value: 'monitoring', label: 'Monitoring blood pressure at home' },
-        { value: 'lifestyle', label: 'How lifestyle affects medications' },
-        { value: 'emergency', label: 'What to do if blood pressure is too high or low' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with blood pressure medications right now?',
-      placeholder: 'e.g., "Remembering to take my medications" or "Managing side effects"',
-      examples: [
-        'Remembering to take my medications',
-        'Managing side effects',
-        'Understanding drug interactions',
-        'Monitoring blood pressure at home',
-        'Knowing when to call the doctor'
+        { value: 'how_work', label: 'I understand how blood pressure medications work in my body' },
+        { value: 'medication_types', label: 'I know the different types of BP medications and why they\'re prescribed' },
+        { value: 'side_effects_why', label: 'I understand why side effects happen and what they mean' },
+        { value: 'interactions', label: 'I know how medications interact with food and other drugs' },
+        { value: 'bp_numbers', label: 'I understand blood pressure numbers and what they mean' },
+        { value: 'emergency_signs', label: 'I can recognize dangerous blood pressure levels' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about blood pressure medications' },
+        { value: 'other', label: 'Other - I have specific knowledge about blood pressure medications (please specify)' }
       ]
     },
     learningStyle: {
@@ -827,25 +759,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about cholesterol medications?',
+      question: 'What aspects of cholesterol medication management do you feel most confident about?',
       options: [
-        { value: 'timing', label: 'When and how often to take medications' },
-        { value: 'side_effects', label: 'Understanding and managing side effects' },
-        { value: 'interactions', label: 'Drug interactions and food interactions' },
-        { value: 'monitoring', label: 'Monitoring cholesterol levels' },
-        { value: 'lifestyle', label: 'How diet and exercise affect medications' },
-        { value: 'long_term', label: 'Long-term effects and benefits' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with cholesterol medications right now?',
-      placeholder: 'e.g., "Managing muscle pain from statins" or "Understanding if the medication is working"',
-      examples: [
-        'Managing muscle pain from statins',
-        'Understanding if the medication is working',
-        'Dealing with side effects',
-        'Understanding drug interactions',
-        'Knowing when to call the doctor'
+        { value: 'how_work', label: 'I understand how statins lower cholesterol in my body' },
+        { value: 'cholesterol_types', label: 'I know the different types of cholesterol (HDL, LDL, triglycerides)' },
+        { value: 'why_timing', label: 'I understand why timing matters for statin effectiveness' },
+        { value: 'side_effects_causes', label: 'I know why muscle pain and other side effects occur' },
+        { value: 'interactions', label: 'I understand how statins interact with food and other drugs' },
+        { value: 'long_term', label: 'I know the long-term benefits and what to expect' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about cholesterol medications' },
+        { value: 'other', label: 'Other - I have specific knowledge about cholesterol medications (please specify)' }
       ]
     },
     learningStyle: {
@@ -868,25 +791,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about your endoscopy procedure?',
+      question: 'What aspects of your endoscopy procedure do you feel most confident about?',
       options: [
-        { value: 'preparation', label: 'Pre-procedure preparation steps' },
-        { value: 'what_to_expect', label: 'What to expect during the procedure' },
-        { value: 'recovery', label: 'Recovery process and timeline' },
-        { value: 'diet_restrictions', label: 'Diet restrictions and changes' },
-        { value: 'medication_adjustments', label: 'Medication adjustments needed' },
-        { value: 'results', label: 'Understanding your results' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest concern about the endoscopy procedure?',
-      placeholder: 'e.g., "The preparation process" or "What happens during the procedure"',
-      examples: [
-        'The preparation process',
-        'What happens during the procedure',
-        'Recovery discomfort',
-        'Understanding the results',
-        'Managing anxiety about the procedure'
+        { value: 'preparation', label: 'I understand the pre-procedure preparation steps' },
+        { value: 'what_to_expect', label: 'I know what to expect during the procedure' },
+        { value: 'recovery', label: 'I understand the recovery process and timeline' },
+        { value: 'diet_restrictions', label: 'I know the diet restrictions and changes needed' },
+        { value: 'medication_adjustments', label: 'I understand what medication adjustments are needed' },
+        { value: 'results', label: 'I know how to understand my results' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about endoscopy procedures' },
+        { value: 'other', label: 'Other - I have specific knowledge about endoscopy procedures (please specify)' }
       ]
     },
     learningStyle: {
@@ -908,25 +822,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about your outpatient surgery?',
+      question: 'What aspects of your outpatient surgery do you feel most confident about?',
       options: [
-        { value: 'preparation', label: 'Pre-surgery preparation' },
-        { value: 'surgery_day', label: 'What to expect on surgery day' },
-        { value: 'recovery', label: 'Post-surgery recovery process' },
-        { value: 'pain_management', label: 'Managing pain after surgery' },
-        { value: 'activity_restrictions', label: 'Activity restrictions and limitations' },
-        { value: 'follow_up', label: 'Follow-up care and appointments' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest concern about the outpatient surgery?',
-      placeholder: 'e.g., "Pre-surgery anxiety" or "Managing recovery at home"',
-      examples: [
-        'Pre-surgery anxiety',
-        'Managing recovery at home',
-        'Pain management after surgery',
-        'Returning to normal activities',
-        'Understanding activity restrictions'
+        { value: 'preparation', label: 'I understand the pre-surgery preparation requirements' },
+        { value: 'surgery_day', label: 'I know what to expect on surgery day' },
+        { value: 'recovery', label: 'I understand the post-surgery recovery process' },
+        { value: 'pain_management', label: 'I know how to manage pain after surgery' },
+        { value: 'activity_restrictions', label: 'I understand activity restrictions and limitations' },
+        { value: 'follow_up', label: 'I know about follow-up care and appointments' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about outpatient surgery' },
+        { value: 'other', label: 'Other - I have specific knowledge about outpatient surgery (please specify)' }
       ]
     },
     learningStyle: {
@@ -948,25 +853,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about your imaging test?',
+      question: 'What aspects of your imaging test do you feel most confident about?',
       options: [
-        { value: 'preparation', label: 'Pre-test preparation requirements' },
-        { value: 'what_to_expect', label: 'What to expect during the test' },
-        { value: 'safety', label: 'Safety considerations and concerns' },
-        { value: 'results', label: 'Understanding your test results' },
-        { value: 'follow_up', label: 'Follow-up procedures if needed' },
-        { value: 'cost', label: 'Cost and insurance coverage' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest concern about the imaging test?',
-      placeholder: 'e.g., "Claustrophobia during MRI" or "Understanding the results"',
-      examples: [
-        'Claustrophobia during MRI',
-        'Radiation exposure concerns',
-        'Understanding the results',
-        'Preparation requirements',
-        'Cost and insurance coverage'
+        { value: 'preparation', label: 'I understand the pre-test preparation requirements' },
+        { value: 'what_to_expect', label: 'I know what to expect during the test' },
+        { value: 'safety', label: 'I understand safety considerations and concerns' },
+        { value: 'results', label: 'I know how to understand my test results' },
+        { value: 'follow_up', label: 'I understand follow-up procedures if needed' },
+        { value: 'cost', label: 'I know about cost and insurance coverage' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about imaging tests' },
+        { value: 'other', label: 'Other - I have specific knowledge about imaging tests (please specify)' }
       ]
     },
     learningStyle: {
@@ -988,25 +884,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about your dental procedure?',
+      question: 'What aspects of your dental procedure do you feel most confident about?',
       options: [
-        { value: 'preparation', label: 'Pre-procedure preparation' },
-        { value: 'what_to_expect', label: 'What to expect during the procedure' },
-        { value: 'recovery', label: 'Post-procedure care and recovery' },
-        { value: 'pain_management', label: 'Managing pain and discomfort' },
-        { value: 'diet_modifications', label: 'Diet modifications after procedure' },
-        { value: 'healing', label: 'Healing timeline and what to expect' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest concern about the dental procedure?',
-      placeholder: 'e.g., "Pain during or after the procedure" or "Recovery process"',
-      examples: [
-        'Pain during or after the procedure',
-        'Recovery process and timeline',
-        'Cost and insurance coverage',
-        'Procedure anxiety',
-        'Diet restrictions after procedure'
+        { value: 'preparation', label: 'I understand the pre-procedure preparation requirements' },
+        { value: 'what_to_expect', label: 'I know what to expect during the procedure' },
+        { value: 'recovery', label: 'I understand post-procedure care and recovery' },
+        { value: 'pain_management', label: 'I know how to manage pain and discomfort' },
+        { value: 'diet_modifications', label: 'I understand diet modifications after the procedure' },
+        { value: 'healing', label: 'I know the healing timeline and what to expect' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about dental procedures' },
+        { value: 'other', label: 'Other - I have specific knowledge about dental procedures (please specify)' }
       ]
     },
     learningStyle: {
@@ -1029,25 +916,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about managing anxiety?',
+      question: 'What aspects of managing anxiety do you feel most confident about?',
       options: [
-        { value: 'breathing_techniques', label: 'Breathing and relaxation techniques' },
-        { value: 'panic_attacks', label: 'Managing panic attacks' },
-        { value: 'triggers', label: 'Identifying and managing anxiety triggers' },
-        { value: 'coping_strategies', label: 'Healthy coping strategies' },
-        { value: 'medication', label: 'Understanding anxiety medications' },
-        { value: 'lifestyle', label: 'Lifestyle changes for anxiety management' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with anxiety right now?',
-      placeholder: 'e.g., "Managing panic attacks" or "Feeling anxious in social situations"',
-      examples: [
-        'Managing panic attacks',
-        'Feeling anxious in social situations',
-        'Sleep problems due to anxiety',
-        'Work-related anxiety',
-        'General worry and overthinking'
+        { value: 'breathing_techniques', label: 'I know breathing and relaxation techniques' },
+        { value: 'panic_attacks', label: 'I understand how to manage panic attacks' },
+        { value: 'triggers', label: 'I can identify and manage my anxiety triggers' },
+        { value: 'coping_strategies', label: 'I know healthy coping strategies' },
+        { value: 'medication', label: 'I understand my anxiety medications' },
+        { value: 'lifestyle', label: 'I know lifestyle changes for anxiety management' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about anxiety management' },
+        { value: 'other', label: 'Other - I have specific knowledge about anxiety management (please specify)' }
       ]
     },
     learningStyle: {
@@ -1069,25 +947,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about managing depression?',
+      question: 'What aspects of managing depression do you feel most confident about?',
       options: [
-        { value: 'mood_regulation', label: 'Mood regulation strategies' },
-        { value: 'daily_routines', label: 'Building healthy daily routines' },
-        { value: 'medication', label: 'Understanding depression medications' },
-        { value: 'therapy', label: 'Therapy and counseling approaches' },
-        { value: 'lifestyle', label: 'Lifestyle changes for depression' },
-        { value: 'support_systems', label: 'Building support systems' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with depression right now?',
-      placeholder: 'e.g., "Lack of motivation" or "Feeling hopeless about the future"',
-      examples: [
-        'Lack of motivation and energy',
-        'Feeling hopeless about the future',
-        'Sleep problems',
-        'Difficulty concentrating',
-        'Social isolation'
+        { value: 'mood_regulation', label: 'I know mood regulation strategies' },
+        { value: 'daily_routines', label: 'I understand how to build healthy daily routines' },
+        { value: 'medication', label: 'I understand my depression medications' },
+        { value: 'therapy', label: 'I know about therapy and counseling approaches' },
+        { value: 'lifestyle', label: 'I understand lifestyle changes for depression' },
+        { value: 'support_systems', label: 'I know how to build support systems' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about depression management' },
+        { value: 'other', label: 'Other - I have specific knowledge about depression management (please specify)' }
       ]
     },
     learningStyle: {
@@ -1109,25 +978,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about stress management?',
+      question: 'What aspects of stress management do you feel most confident about?',
       options: [
-        { value: 'relaxation_techniques', label: 'Relaxation techniques' },
-        { value: 'time_management', label: 'Time management and organization' },
-        { value: 'work_life_balance', label: 'Work-life balance' },
-        { value: 'mindfulness', label: 'Mindfulness and meditation' },
-        { value: 'physical_activity', label: 'Physical activity for stress relief' },
-        { value: 'coping_skills', label: 'Healthy coping skills' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with stress right now?',
-      placeholder: 'e.g., "Work pressure" or "Finding time for self-care"',
-      examples: [
-        'Work pressure and deadlines',
-        'Finding time for self-care',
-        'Financial stress',
-        'Relationship stress',
-        'Health-related stress'
+        { value: 'relaxation_techniques', label: 'I know relaxation techniques' },
+        { value: 'time_management', label: 'I understand time management and organization' },
+        { value: 'work_life_balance', label: 'I know how to maintain work-life balance' },
+        { value: 'mindfulness', label: 'I understand mindfulness and meditation' },
+        { value: 'physical_activity', label: 'I know how physical activity helps with stress relief' },
+        { value: 'coping_skills', label: 'I know healthy coping skills' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about stress management' },
+        { value: 'other', label: 'Other - I have specific knowledge about stress management (please specify)' }
       ]
     },
     learningStyle: {
@@ -1149,25 +1009,16 @@ export const STEP3_QUESTIONS: Record<string, {
       ]
     },
     mainInterests: {
-      question: 'What would you most like to learn about sleep health?',
+      question: 'What aspects of sleep health management do you feel most confident about?',
       options: [
-        { value: 'sleep_hygiene', label: 'Sleep hygiene and routines' },
-        { value: 'sleep_disorders', label: 'Understanding sleep disorders' },
-        { value: 'medication', label: 'Sleep medications and alternatives' },
-        { value: 'lifestyle', label: 'Lifestyle changes for better sleep' },
-        { value: 'stress_sleep', label: 'Managing stress and sleep' },
-        { value: 'environment', label: 'Creating a sleep-friendly environment' }
-      ]
-    },
-    biggestChallenge: {
-      question: 'What\'s your biggest challenge with sleep right now?',
-      placeholder: 'e.g., "Falling asleep" or "Staying asleep through the night"',
-      examples: [
-        'Falling asleep',
-        'Staying asleep through the night',
-        'Waking up too early',
-        'Feeling tired during the day',
-        'Sleep anxiety'
+        { value: 'sleep_hygiene', label: 'I know sleep hygiene and routines' },
+        { value: 'sleep_disorders', label: 'I understand sleep disorders' },
+        { value: 'medication', label: 'I know about sleep medications and alternatives' },
+        { value: 'lifestyle', label: 'I understand lifestyle changes for better sleep' },
+        { value: 'stress_sleep', label: 'I know how to manage stress and sleep' },
+        { value: 'environment', label: 'I understand how to create a sleep-friendly environment' },
+        { value: 'none', label: 'None of the above - I\'m just starting to learn about sleep health' },
+        { value: 'other', label: 'Other - I have specific knowledge about sleep health (please specify)' }
       ]
     },
     learningStyle: {

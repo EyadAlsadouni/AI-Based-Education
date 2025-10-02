@@ -48,11 +48,7 @@ IMPORTANT GUIDELINES:
 10. Provide actionable, practical advice when appropriate
 11. If user asks medical advice questions, redirect them to consult their doctor
 
-Your responses should be structured to help create 4 educational cards:
-1. Diagnosis Basics - Core knowledge about their condition
-2. Nutrition and Carbs - Dietary guidance specific to their condition
-3. Workout - Safe exercise recommendations for their condition
-4. Plan Your Day - Daily management checklist and tips
+IMPORTANT: Generate content that is specific to the requested card topic only. Do not include generic card titles or structures. Focus on providing educational content that directly addresses the specific card's title and description.
 
 Keep responses informative but conversational, and always maintain a supportive tone.`;
 };
@@ -125,14 +121,58 @@ Content Requirements:`;
 
   basePrompt += `
 
+CRITICAL INSTRUCTIONS:
+- DO NOT include generic card titles like "Card 1: Diagnosis Basics", "Card 2: Nutrition and Carbs", "Card 3: Workout", or "Card 4: Plan Your Day"
+- DO NOT structure your response as multiple cards or sections
+- Focus ONLY on the specific topic: ${card.title}
+- Write content that directly addresses the card's description: ${card.description}
+- Do not include introductory phrases that reference other card types
+
 REQUIREMENTS:
 - Include 2-3 credible medical references with [1], [2] format
 - Add "References:" section with full citations
 - Use Mayo Clinic, CDC, WebMD, or Healthline sources
 - Keep under 400 words total
-- Make it beginner-friendly and actionable`;
+- Make it beginner-friendly and actionable
+- Write as a single, focused piece of content about ${card.title}`;
 
   return basePrompt;
+};
+
+// Sanitize AI content to remove any legacy card headings or generic templates
+const sanitizeAIContent = (content, cardTitle = '') => {
+  if (!content || typeof content !== 'string') return content;
+  let sanitized = content;
+
+  // Remove lines like: "Card 1: Diagnosis Basics - ..." or any "Card X:" heading
+  sanitized = sanitized.replace(/^\s*Card\s*\d+\s*:\s*.*$/gmi, '').trim();
+
+  // Remove legacy generic section headings if present at line starts
+  const legacyHeadings = [
+    'Diagnosis Basics',
+    'Nutrition and Carbs',
+    'Nutrition',
+    'Workout',
+    'Plan Your Day',
+  ];
+  const legacyPattern = new RegExp(
+    `^\s*(?:${legacyHeadings
+      .map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|')})(?:\s*-.*)?$`,
+    'gmi'
+  );
+  sanitized = sanitized.replace(legacyPattern, '').trim();
+
+  // If the AI echoed the card title as a heading, keep it but ensure no leading numbering
+  if (cardTitle) {
+    const numberedTitle = new RegExp(`^\s*Card\s*\d+\s*:\\s*${cardTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*$`, 'gmi');
+    sanitized = sanitized.replace(numberedTitle, '').trim();
+  }
+
+  // Collapse excessive blank lines
+  sanitized = sanitized.replace(/\n{3,}/g, '\n\n');
+
+  return sanitized;
 };
 
 // POST /api/ai/generate-dashboard - Generate AI-powered dashboard content
@@ -200,7 +240,7 @@ router.post('/generate-dashboard', async (req, res) => {
             const cardPrompt = generateDynamicCardPrompt(card, userData);
             
             try {
-              const response = await openai.chat.completions.create({
+            const response = await openai.chat.completions.create({
                 model: 'gpt-4',
                 messages: [
                   { role: 'system', content: systemPrompt },
@@ -213,7 +253,7 @@ router.post('/generate-dashboard', async (req, res) => {
               console.log(`Generated content for card: ${card.title} (${card.contentKey})`);
               return {
                 contentKey: card.contentKey,
-                content: response.choices[0].message.content
+              content: sanitizeAIContent(response.choices[0].message.content, card.title)
               };
             } catch (cardError) {
               console.error(`Error generating content for card ${card.title}:`, cardError);

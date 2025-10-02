@@ -574,91 +574,16 @@ export const DashboardComponent: React.FC = () => {
     loadDashboard();
   }, [router]);
 
-  // Generate dashboard content only if truly missing (fallback for legacy cards)
-  useEffect(() => {
-    if (!loadingSession && userSession && !dashboardContent && userId && dynamicCards.length === 0) {
-      console.log('Dashboard content missing, generating as fallback');
-      generateDashboardContent();
-    }
-  }, [loadingSession, userSession, dashboardContent, userId, dynamicCards.length]);
-
-  const generateDashboardContent = async () => {
-    if (!userId) return;
-
-    setGeneratingContent(true);
-    setError('');
-
-    try {
-      console.log('=== FRONTEND: Starting AI dashboard generation (fallback) ===');
-      console.log('User ID:', userId);
-      console.log('Dynamic cards being sent:', dynamicCards.length);
-      
-      const response = await aiApi.generateDashboard(userId, dynamicCards);
-      console.log('=== FRONTEND: AI generation response received ===');
-      console.log('Response success:', response.success);
-      console.log('Response dashboard keys:', Object.keys(response.dashboard || {}));
-      
-      if (response.success && response.dashboard) {
-        console.log('Dashboard content received:', response.dashboard);
-        setDashboardContent(response.dashboard);
-        formStorage.saveCurrentStep(5);
-      } else {
-        throw new Error('Failed to generate dashboard content');
-      }
-    } catch (err) {
-      console.error('AI generation error:', err);
-      const errorMessage = handleApiError(err);
-      errorUtils.log('DashboardComponent generateDashboardContent', err);
-      setError(errorMessage);
-      
-      // Fallback content if AI generation fails
-      const fallbackContent: DashboardContent = {
-        diagnosis_basics: `Learn about ${userSession?.condition_selected || 'your condition'} and how it affects your body. Understanding your condition is the first step toward better management.`,
-        nutrition_carbs: `Proper nutrition plays a crucial role in managing ${userSession?.condition_selected || 'your condition'}. Focus on balanced meals and work with your healthcare team for personalized guidance.`,
-        workout: `Regular physical activity can help manage ${userSession?.condition_selected || 'your condition'}. Start slowly and consult your doctor before beginning any exercise program.`,
-        daily_plan: `Create a daily routine that includes medication reminders, health monitoring, and lifestyle habits that support your ${userSession?.condition_selected || 'condition'} management.`
-      };
-      console.log('Using fallback content:', fallbackContent);
-      setDashboardContent(fallbackContent);
-    } finally {
-      setGeneratingContent(false);
-    }
-  };
 
   const handleCardClick = (cardId: string) => {
     if (!dashboardContent) return;
 
-    // Try to find card in dynamic cards first
-    let card = dynamicCards.find(c => c.id === cardId);
-    if (!card) {
-      // Fallback to legacy cards
-      card = DASHBOARD_CARDS.find(c => c.id === cardId);
-    }
+    // Only work with dynamic cards - no fallback to legacy cards
+    const card = dynamicCards.find(c => c.id === cardId);
     if (!card) return;
 
-    let content = '';
-    
-    // For dynamic cards, use the contentKey to get content
-    if ('contentKey' in card) {
-      content = (dashboardContent as any)[card.contentKey] || '';
-    } else {
-      // Legacy card handling
-      switch (cardId) {
-        case 'diagnosis':
-          content = dashboardContent.diagnosis_basics;
-          break;
-        case 'nutrition':
-          content = dashboardContent.nutrition_carbs;
-          break;
-        case 'workout':
-          content = dashboardContent.workout;
-          break;
-        case 'daily_plan':
-          content = dashboardContent.daily_plan;
-          break;
-      }
-    }
-
+    // Get content using contentKey for dynamic cards
+    const content = (dashboardContent as any)[card.contentKey] || '';
     setSelectedCard({
       title: card.title,
       content,
@@ -899,9 +824,9 @@ export const DashboardComponent: React.FC = () => {
             </div>
             
             <div className="p-6">
-              {dashboardContent ? (
+              {dashboardContent && dynamicCards.length > 0 ? (
                 <div className="space-y-6">
-                  {(dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).map((card) => {
+                  {dynamicCards.map((card) => {
                     let content = '';
                     
                     // For dynamic cards, use the contentKey to get content
@@ -1001,23 +926,25 @@ export const DashboardComponent: React.FC = () => {
                     );
                   })}
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-yellow-600 text-2xl">⚡</span>
+              ) : dynamicCards.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </div>
-                  <h3 className="font-semibold text-gray-900 mb-2">Generating Content</h3>
-                  <p className="text-gray-600 mb-4">
-                    AI is preparing your personalized educational materials
-                  </p>
-                  <Button
-                    onClick={generateDashboardContent}
-                    loading={generatingContent}
-                    disabled={generatingContent}
-                    className="bg-blue-600 hover:bg-blue-700 cursor-pointer hover:scale-105 transition-transform"
-                  >
-                    Generate Content
-                  </Button>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Generating Your Dashboard</h3>
+                  <p className="text-gray-500">Please wait while we create your personalized educational content...</p>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Content Available</h3>
+                  <p className="text-gray-500">Please complete the previous steps to generate your personalized dashboard.</p>
                 </div>
               )}
             </div>
@@ -1030,17 +957,6 @@ export const DashboardComponent: React.FC = () => {
               
               {/* Primary Action Buttons */}
               <div className="flex justify-center gap-3 mb-6">
-                <Button
-                  onClick={generateDashboardContent}
-                  loading={generatingContent}
-                  disabled={generatingContent}
-                  className="bg-white hover:bg-blue-50 border-2 border-gray-300 hover:border-blue-400 text-gray-700 hover:text-blue-700 cursor-pointer transition-all px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium shadow-sm hover:shadow-md"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh Content
-                </Button>
                 
                 <Button
                   onClick={handleDownloadPDF}
@@ -1234,7 +1150,7 @@ export const DashboardComponent: React.FC = () => {
                 <path d="M8 5v14l11-7z"/>
               </svg>
               <span className="text-sm text-gray-700">
-                Playing: {(dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.id === playingCardId)?.title}
+                Playing: {dynamicCards.find(c => c.id === playingCardId)?.title}
               </span>
             </div>
             <button
@@ -1271,16 +1187,16 @@ export const DashboardComponent: React.FC = () => {
         content={selectedCard?.content || ''}
         icon={selectedCard?.icon || ''}
         highlightedText={highlightedText}
-        isHighlighting={isHighlighting && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
-        isPlaying={isPlaying && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
-        isPaused={isPaused && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
-        isGenerating={isGenerating && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
+        isHighlighting={isHighlighting && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
+        isPlaying={isPlaying && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
+        isPaused={isPaused && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
+        isGenerating={isGenerating && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
         audioDuration={audioDuration}
         audioCurrentTime={audioCurrentTime}
         onPlayPause={() => {
           if (selectedCard) {
             // Find the card ID that matches the selected card title
-            const card = (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title);
+            const card = dynamicCards.find(c => c.title === selectedCard.title);
             if (card) {
               handleVoiceRead(card.id, { stopPropagation: () => {} } as any);
             }

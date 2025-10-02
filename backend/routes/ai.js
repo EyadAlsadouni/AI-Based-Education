@@ -29,6 +29,10 @@ User Context:
 - Checks Vitals: ${userData.checks_vitals || 'Not specified'}
 - Main Goals: ${userData.main_goal ? (Array.isArray(userData.main_goal) ? userData.main_goal.join(', ') : userData.main_goal) : 'Not specified'}
 - Main Question: ${userData.main_question || 'Not specified'}
+- Knowledge Level: ${userData.knowledge_level || 'Not specified'}
+- Main Interests: ${userData.main_interests ? (Array.isArray(userData.main_interests) ? userData.main_interests.join(', ') : userData.main_interests) : 'Not specified'}
+- Learning Style: ${userData.learning_style || 'Not specified'}
+- Other Knowledge: ${userData.other_knowledge || 'Not specified'}
 ${userData.main_question && userData.main_question.includes('medication') ? 'NOTE: User asked about medications - provide educational info only, redirect to doctor for medical advice' : ''}
 
 IMPORTANT GUIDELINES:
@@ -53,11 +57,93 @@ Your responses should be structured to help create 4 educational cards:
 Keep responses informative but conversational, and always maintain a supportive tone.`;
 };
 
+// Helper function to generate prompts for dynamic cards
+const generateDynamicCardPrompt = (card, userData) => {
+  const learningStyle = userData.learning_style || 'step_by_step';
+  const condition = userData.condition_selected;
+  const mainInterests = userData.main_interests ? userData.main_interests.join(', ') : '';
+  const mainGoals = userData.main_goal ? userData.main_goal.join(', ') : '';
+  
+  let basePrompt = `Generate educational content for: ${card.title}
+  
+Description: ${card.description}
+Condition: ${condition}
+User's Main Interests: ${mainInterests}
+User's Main Goals: ${mainGoals}
+Knowledge Level: ${userData.knowledge_level || 'new'}
+
+Content Requirements:`;
+
+  // Adapt content based on learning style
+  if (learningStyle === 'videos') {
+    basePrompt += `
+- Include 2-3 specific YouTube video links from reputable medical/health channels
+- Focus on visual demonstrations and step-by-step video tutorials
+- Recommend videos from channels like: Mayo Clinic, Cleveland Clinic, American Heart Association, or similar medical institutions
+- Format video links as: https://www.youtube.com/watch?v=VIDEO_ID
+- Ensure videos are from 2020 or newer for accuracy`;
+  } else if (learningStyle === 'step_by_step') {
+    basePrompt += `
+- Provide detailed, step-by-step instructions
+- Use numbered lists and clear headings
+- Include specific actions the user can take
+- Break down complex processes into manageable steps`;
+  } else if (learningStyle === 'quick_tips') {
+    basePrompt += `
+- Provide concise, scannable information
+- Use bullet points and short paragraphs
+- Focus on key takeaways and practical tips
+- Make it easy to read quickly`;
+  }
+
+  // Add specific content based on card type
+  if (card.id.includes('technique') || card.id.includes('use')) {
+    basePrompt += `
+- Include detailed technique instructions
+- Explain common mistakes to avoid
+- Provide troubleshooting tips
+- Include safety considerations`;
+  } else if (card.id.includes('management') || card.id.includes('monitoring')) {
+    basePrompt += `
+- Explain how to track progress
+- Include signs of improvement or concern
+- Provide practical monitoring strategies
+- Include when to seek help`;
+  } else if (card.id.includes('preparation') || card.id.includes('prep')) {
+    basePrompt += `
+- Provide timeline-based preparation steps
+- Include what to bring and what to avoid
+- Explain what to expect during the process
+- Include post-procedure care instructions`;
+  } else if (card.id.includes('safety') || card.id.includes('emergency')) {
+    basePrompt += `
+- Include warning signs to watch for
+- Explain when to seek immediate help
+- Provide emergency contact information
+- Include safety precautions and storage tips`;
+  }
+
+  basePrompt += `
+
+IMPORTANT REQUIREMENTS:
+- Include 2-4 real, credible references from reputable medical sources
+- Use numbered references [1], [2], etc. within the text where appropriate
+- At the end, include a "References:" section with full citations
+- Sources should be from: Mayo Clinic, American Medical Association, CDC, WebMD, Healthline, or similar reputable medical sources
+- Ensure all referenced URLs are real and working
+- Keep content under 500 words including references
+- Make it beginner-friendly and easy to understand
+- Focus on practical, actionable advice`;
+
+  return basePrompt;
+};
+
 // POST /api/ai/generate-dashboard - Generate AI-powered dashboard content
 router.post('/generate-dashboard', async (req, res) => {
   try {
-    const { user_id } = req.body;
-    console.log('AI Dashboard generation request for user:', user_id);
+    const { user_id, dynamic_cards } = req.body;
+    console.log('POST /generate-dashboard called for user:', user_id);
+    console.log('Dynamic cards received:', dynamic_cards ? dynamic_cards.length : 'none');
 
     if (!user_id) {
       console.log('Missing user_id in request');
@@ -82,13 +168,94 @@ router.post('/generate-dashboard', async (req, res) => {
         return res.status(404).json({ error: 'User session not found' });
       }
 
-      // Parse arrays
-      userData.health_goals = userData.health_goals ? userData.health_goals.split(',') : [];
-      userData.medications = userData.medications ? userData.medications.split(',') : [];
+      // Parse arrays - handle both string and array formats
+      userData.health_goals = userData.health_goals ? 
+        (Array.isArray(userData.health_goals) ? userData.health_goals : userData.health_goals.split(',')) : [];
+      userData.medications = userData.medications ? 
+        (Array.isArray(userData.medications) ? userData.medications : userData.medications.split(',')) : [];
+      userData.main_interests = userData.main_interests ? 
+        (Array.isArray(userData.main_interests) ? userData.main_interests : userData.main_interests.split(',')) : [];
+      userData.main_goal = userData.main_goal ? 
+        (Array.isArray(userData.main_goal) ? userData.main_goal : userData.main_goal.split(',')) : [];
 
       try {
         // Generate AI response for each card
         const systemPrompt = generateSystemPrompt(userData);
+
+        // Handle dynamic cards if provided
+        if (dynamic_cards && dynamic_cards.length > 0) {
+          console.log('Generating content for dynamic cards:', dynamic_cards.length);
+          
+          // Clear any existing content in database first
+          console.log('Clearing existing content from database...');
+          db.run('UPDATE user_sessions SET ai_response = NULL WHERE user_id = ?', [user_id], function(err) {
+            if (err) {
+              console.error('Error clearing existing content:', err);
+            } else {
+              console.log('Successfully cleared existing content from database');
+            }
+          });
+          
+          const dynamicContent = {};
+          
+          // Generate content for each dynamic card
+          for (const card of dynamic_cards) {
+            const cardPrompt = generateDynamicCardPrompt(card, userData);
+            
+            try {
+              const response = await openai.chat.completions.create({
+                model: 'gpt-4',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: cardPrompt }
+                ],
+                max_tokens: 600,
+                temperature: 0.7
+              });
+              
+              dynamicContent[card.contentKey] = response.choices[0].message.content;
+              console.log(`Generated content for card: ${card.title} (${card.contentKey})`);
+            } catch (cardError) {
+              console.error(`Error generating content for card ${card.title}:`, cardError);
+              dynamicContent[card.contentKey] = `Content for ${card.title} is temporarily unavailable. Please try again later.`;
+            }
+          }
+          
+          // Save AI response to database
+          const aiResponseString = JSON.stringify(dynamicContent);
+          console.log('Saving dynamic content to database:', Object.keys(dynamicContent));
+          db.run('UPDATE user_sessions SET ai_response = ? WHERE user_id = ?', [aiResponseString, user_id], function(err) {
+            if (err) {
+              console.error('Error saving AI response:', err);
+            } else {
+              console.log('Successfully saved dynamic content to database');
+              // Verify the content was saved correctly
+              db.get('SELECT ai_response FROM user_sessions WHERE user_id = ?', [user_id], (verifyErr, verifyRow) => {
+                if (verifyErr) {
+                  console.error('Error verifying saved content:', verifyErr);
+                } else {
+                  console.log('Verified saved content keys:', Object.keys(JSON.parse(verifyRow.ai_response || '{}')));
+                }
+              });
+            }
+          });
+          
+          console.log('Sending dynamic content to frontend:', Object.keys(dynamicContent));
+          
+          res.json({
+            success: true,
+            dashboard: dynamicContent,
+            user_context: {
+              name: userData.full_name,
+              condition: userData.condition_selected,
+              main_goals: Array.isArray(userData.main_goal) ? userData.main_goal : [userData.main_goal]
+            }
+          });
+          
+          return;
+        }
+
+        console.log('No dynamic cards, generating legacy content');
 
         // Card 1: Diagnosis Basics
         const diagnosisPrompt = `Generate educational content about ${userData.condition_selected} basics. Include:

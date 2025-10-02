@@ -78,10 +78,11 @@ export interface Step4FormData {
 
 // Dashboard card content
 export interface DashboardContent {
-  diagnosis_basics: string;
-  nutrition_carbs: string;
-  workout: string;
-  daily_plan: string;
+  diagnosis_basics?: string;
+  nutrition_carbs?: string;
+  workout?: string;
+  daily_plan?: string;
+  [key: string]: string | undefined; // Allow dynamic content keys
 }
 
 // API Response types

@@ -104,8 +104,11 @@ export const medicationsApi = {
 // AI API functions
 export const aiApi = {
   // Generate dashboard content
-  generateDashboard: async (userId: number): Promise<DashboardResponse> => {
-    const response = await api.post('/ai/generate-dashboard', { user_id: userId });
+  generateDashboard: async (userId: number, dynamicCards?: any[]): Promise<DashboardResponse> => {
+    const response = await api.post('/ai/generate-dashboard', { 
+      user_id: userId,
+      dynamic_cards: dynamicCards 
+    });
     return response.data;
   },
 

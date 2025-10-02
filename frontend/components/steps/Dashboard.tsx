@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '../ui/Button';
 import { aiApi, userApi, handleApiError, voiceApi } from '../../lib/api';
 import { formStorage, format, error as errorUtils } from '../../lib/utils';
-import { DASHBOARD_CARDS } from '../../lib/constants';
+import { DASHBOARD_CARDS, generateDashboardCards, DashboardCard } from '../../lib/constants';
 import { DashboardContent, UserSession } from '../../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -203,6 +203,7 @@ export const DashboardComponent: React.FC = () => {
   const [selectedCard, setSelectedCard] = useState<{ title: string; content: string; icon: string } | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [error, setError] = useState<string>('');
+  const [dynamicCards, setDynamicCards] = useState<DashboardCard[]>([]);
   
   // Voice reading states
   const [playingCardId, setPlayingCardId] = useState<string | null>(null);
@@ -258,15 +259,90 @@ export const DashboardComponent: React.FC = () => {
         const session = await userApi.getSession(storedUserId);
         setUserSession(session);
 
-        // Always try to load existing dashboard content
-        try {
-          const dashboardData = await aiApi.getDashboard(storedUserId);
-          if (dashboardData.success && dashboardData.dashboard) {
-            setDashboardContent(dashboardData.dashboard);
+        // Generate dynamic cards based on user session
+        let generatedCards = [];
+        if (session) {
+          try {
+            // Ensure arrays are properly parsed
+            const healthGoals = Array.isArray(session.health_goals) ? session.health_goals : (session.health_goals ? session.health_goals.split(',') : []);
+            const mainInterests = Array.isArray(session.main_interests) ? session.main_interests : (session.main_interests ? session.main_interests.split(',') : []);
+            const mainGoals = Array.isArray(session.main_goal) ? session.main_goal : (session.main_goal ? session.main_goal.split(',') : []);
+            
+            console.log('Dashboard - Parsed data:', {
+              condition: session.condition_selected,
+              healthGoals,
+              mainInterests,
+              mainGoals,
+              knowledgeLevel: session.knowledge_level,
+              learningStyle: session.learning_style
+            });
+            
+            generatedCards = generateDashboardCards(
+              session.condition_selected,
+              healthGoals,
+              session.knowledge_level || 'new',
+              mainInterests,
+              mainGoals,
+              session.learning_style
+            );
+            console.log('Dashboard - Generated cards:', generatedCards.length);
+            setDynamicCards(generatedCards);
+          } catch (cardError) {
+            console.error('Error generating dynamic cards:', cardError);
+            // Set empty array as fallback
+            generatedCards = [];
+            setDynamicCards([]);
           }
-        } catch (dashboardErr) {
-          // Dashboard doesn't exist yet, will generate new one
-          console.log('No existing dashboard found, will generate new one');
+        }
+
+        // Only try to load existing dashboard content if no dynamic cards are present
+        if (generatedCards && generatedCards.length > 0) {
+          console.log('Dynamic cards present, will generate new content instead of loading existing');
+          // Generate content immediately with the cards we just created
+          try {
+            console.log('=== FRONTEND: Starting AI dashboard generation ===');
+            console.log('User ID:', storedUserId);
+            console.log('Dynamic cards being sent:', generatedCards.length);
+            console.log('Dynamic cards details:', generatedCards.map(c => ({ id: c.id, contentKey: c.contentKey, title: c.title })));
+            
+            const response = await aiApi.generateDashboard(storedUserId, generatedCards);
+            console.log('=== FRONTEND: AI generation response received ===');
+            console.log('Response success:', response.success);
+            console.log('Response dashboard keys:', Object.keys(response.dashboard || {}));
+            
+            if (response.success && response.dashboard) {
+              console.log('Dashboard content received:', response.dashboard);
+              setDashboardContent(response.dashboard);
+              formStorage.saveCurrentStep(5);
+            } else {
+              throw new Error('Failed to generate dashboard content');
+            }
+          } catch (err) {
+            console.error('AI generation error:', err);
+            const errorMessage = handleApiError(err);
+            errorUtils.log('DashboardComponent generateDashboardContent', err);
+            setError(errorMessage);
+            
+            // Fallback content if AI generation fails
+            const fallbackContent: DashboardContent = {
+              diagnosis_basics: `Learn about ${session?.condition_selected || 'your condition'} and how it affects your body. Understanding your condition is the first step toward better management.`,
+              nutrition_carbs: `Proper nutrition plays a crucial role in managing ${session?.condition_selected || 'your condition'}. Focus on balanced meals and work with your healthcare team for personalized guidance.`,
+              workout: `Regular physical activity can help manage ${session?.condition_selected || 'your condition'}. Start slowly and consult your doctor before beginning any exercise program.`,
+              daily_plan: `Create a daily routine that includes medication reminders, health monitoring, and lifestyle habits that support your ${session?.condition_selected || 'condition'} management.`
+            };
+            console.log('Using fallback content:', fallbackContent);
+            setDashboardContent(fallbackContent);
+          }
+        } else {
+          try {
+            const dashboardData = await aiApi.getDashboard(storedUserId);
+            if (dashboardData.success && dashboardData.dashboard) {
+              setDashboardContent(dashboardData.dashboard);
+            }
+          } catch (dashboardErr) {
+            // Dashboard doesn't exist yet, will generate new one
+            console.log('No existing dashboard found, will generate new one');
+          }
         }
       } catch (err) {
         errorUtils.log('DashboardComponent loadDashboard', err);
@@ -279,13 +355,13 @@ export const DashboardComponent: React.FC = () => {
     loadDashboard();
   }, [router]);
 
-  // Generate dashboard content only if truly missing
+  // Generate dashboard content only if truly missing (fallback for legacy cards)
   useEffect(() => {
-    if (!loadingSession && userSession && !dashboardContent && userId) {
+    if (!loadingSession && userSession && !dashboardContent && userId && dynamicCards.length === 0) {
       console.log('Dashboard content missing, generating as fallback');
       generateDashboardContent();
     }
-  }, [loadingSession, userSession, dashboardContent, userId]);
+  }, [loadingSession, userSession, dashboardContent, userId, dynamicCards.length]);
 
   const generateDashboardContent = async () => {
     if (!userId) return;
@@ -294,11 +370,17 @@ export const DashboardComponent: React.FC = () => {
     setError('');
 
     try {
-      console.log('Starting AI dashboard generation for user:', userId);
-      const response = await aiApi.generateDashboard(userId);
-      console.log('AI generation response:', response);
+      console.log('=== FRONTEND: Starting AI dashboard generation (fallback) ===');
+      console.log('User ID:', userId);
+      console.log('Dynamic cards being sent:', dynamicCards.length);
+      
+      const response = await aiApi.generateDashboard(userId, dynamicCards);
+      console.log('=== FRONTEND: AI generation response received ===');
+      console.log('Response success:', response.success);
+      console.log('Response dashboard keys:', Object.keys(response.dashboard || {}));
       
       if (response.success && response.dashboard) {
+        console.log('Dashboard content received:', response.dashboard);
         setDashboardContent(response.dashboard);
         formStorage.saveCurrentStep(5);
       } else {
@@ -327,23 +409,35 @@ export const DashboardComponent: React.FC = () => {
   const handleCardClick = (cardId: string) => {
     if (!dashboardContent) return;
 
-    const card = DASHBOARD_CARDS.find(c => c.id === cardId);
+    // Try to find card in dynamic cards first
+    let card = dynamicCards.find(c => c.id === cardId);
+    if (!card) {
+      // Fallback to legacy cards
+      card = DASHBOARD_CARDS.find(c => c.id === cardId);
+    }
     if (!card) return;
 
     let content = '';
-    switch (cardId) {
-      case 'diagnosis':
-        content = dashboardContent.diagnosis_basics;
-        break;
-      case 'nutrition':
-        content = dashboardContent.nutrition_carbs;
-        break;
-      case 'workout':
-        content = dashboardContent.workout;
-        break;
-      case 'daily_plan':
-        content = dashboardContent.daily_plan;
-        break;
+    
+    // For dynamic cards, use the contentKey to get content
+    if ('contentKey' in card) {
+      content = (dashboardContent as any)[card.contentKey] || '';
+    } else {
+      // Legacy card handling
+      switch (cardId) {
+        case 'diagnosis':
+          content = dashboardContent.diagnosis_basics;
+          break;
+        case 'nutrition':
+          content = dashboardContent.nutrition_carbs;
+          break;
+        case 'workout':
+          content = dashboardContent.workout;
+          break;
+        case 'daily_plan':
+          content = dashboardContent.daily_plan;
+          break;
+      }
     }
 
     setSelectedCard({
@@ -588,21 +682,32 @@ export const DashboardComponent: React.FC = () => {
             <div className="p-6">
               {dashboardContent ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {DASHBOARD_CARDS.map((card) => {
+                  {(dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).map((card) => {
                     let content = '';
-                    switch (card.id) {
-                      case 'diagnosis':
-                        content = dashboardContent.diagnosis_basics;
-                        break;
-                      case 'nutrition':
-                        content = dashboardContent.nutrition_carbs;
-                        break;
-                      case 'workout':
-                        content = dashboardContent.workout;
-                        break;
-                      case 'daily_plan':
-                        content = dashboardContent.daily_plan;
-                        break;
+                    
+                    // For dynamic cards, use the contentKey to get content
+                    if ('contentKey' in card) {
+                      content = (dashboardContent as any)[card.contentKey] || '';
+                      console.log(`Card ${card.title} (${card.contentKey}):`, content ? `Has content (${content.length} chars)` : 'No content');
+                      if (!content) {
+                        console.log('Available content keys:', Object.keys(dashboardContent || {}));
+                      }
+                    } else {
+                      // Legacy card handling
+                      switch (card.id) {
+                        case 'diagnosis':
+                          content = dashboardContent.diagnosis_basics;
+                          break;
+                        case 'nutrition':
+                          content = dashboardContent.nutrition_carbs;
+                          break;
+                        case 'workout':
+                          content = dashboardContent.workout;
+                          break;
+                        case 'daily_plan':
+                          content = dashboardContent.daily_plan;
+                          break;
+                      }
                     }
 
                     const isCurrentlyPlaying = playingCardId === card.id;
@@ -905,7 +1010,7 @@ export const DashboardComponent: React.FC = () => {
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm text-gray-700">
-                Playing: {DASHBOARD_CARDS.find(c => c.id === playingCardId)?.title}
+                Playing: {(dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.id === playingCardId)?.title}
               </span>
             </div>
             <button

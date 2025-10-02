@@ -77,7 +77,11 @@ router.post('/:id/session', (req, res) => {
     medications,
     checks_vitals,
     main_goal,
-    main_question
+    main_question,
+    knowledge_level,
+    main_interests,
+    learning_style,
+    other_knowledge
   } = req.body;
 
   console.log('Session update request for user:', userId);
@@ -114,18 +118,23 @@ router.post('/:id/session', (req, res) => {
         const updateQuery = `
           UPDATE user_sessions 
           SET condition_selected = ?, diagnosis_year = ?, takes_medication = ?, 
-              medications = ?, checks_vitals = ?, main_goal = ?, main_question = ?
+              medications = ?, checks_vitals = ?, main_goal = ?, main_question = ?,
+              knowledge_level = ?, main_interests = ?, learning_style = ?, other_knowledge = ?
           WHERE user_id = ?
         `;
 
+        const mainInterestsString = Array.isArray(main_interests) ? main_interests.join(',') : main_interests || '';
+        const mainGoalString = Array.isArray(main_goal) ? main_goal.join(',') : main_goal || '';
+
         db.run(updateQuery, [
           condition_selected, diagnosis_year, takes_medication,
-          medicationsString, checks_vitals, main_goal, main_question, userId
+          medicationsString, checks_vitals, mainGoalString, main_question,
+          knowledge_level, mainInterestsString, learning_style, other_knowledge, userId
         ], function(err) {
           if (err) {
             console.error('Error updating session:', err);
             console.error('SQL Query:', updateQuery);
-            console.error('Query params:', [condition_selected, diagnosis_year, takes_medication, medicationsString, checks_vitals, main_goal, main_question, userId]);
+            console.error('Query params:', [condition_selected, diagnosis_year, takes_medication, medicationsString, checks_vitals, mainGoalString, main_question, knowledge_level, mainInterestsString, learning_style, other_knowledge, userId]);
             return res.status(500).json({ error: 'Failed to update session' });
           }
 
@@ -141,18 +150,23 @@ router.post('/:id/session', (req, res) => {
         const insertQuery = `
           INSERT INTO user_sessions 
           (user_id, condition_selected, diagnosis_year, takes_medication, medications, 
-           checks_vitals, main_goal, main_question) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           checks_vitals, main_goal, main_question, knowledge_level, main_interests, 
+           learning_style, other_knowledge) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
+
+        const mainInterestsString = Array.isArray(main_interests) ? main_interests.join(',') : main_interests || '';
+        const mainGoalString = Array.isArray(main_goal) ? main_goal.join(',') : main_goal || '';
 
         db.run(insertQuery, [
           userId, condition_selected, diagnosis_year, takes_medication,
-          medicationsString, checks_vitals, main_goal, main_question
+          medicationsString, checks_vitals, mainGoalString, main_question,
+          knowledge_level, mainInterestsString, learning_style, other_knowledge
         ], function(err) {
           if (err) {
             console.error('Error creating session:', err);
             console.error('SQL Query:', insertQuery);
-            console.error('Query params:', [userId, condition_selected, diagnosis_year, takes_medication, medicationsString, checks_vitals, main_goal, main_question]);
+            console.error('Query params:', [userId, condition_selected, diagnosis_year, takes_medication, medicationsString, checks_vitals, mainGoalString, main_question, knowledge_level, mainInterestsString, learning_style, other_knowledge]);
             return res.status(500).json({ error: 'Failed to create session' });
           }
 

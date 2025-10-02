@@ -125,15 +125,12 @@ Content Requirements:`;
 
   basePrompt += `
 
-IMPORTANT REQUIREMENTS:
-- Include 2-4 real, credible references from reputable medical sources
-- Use numbered references [1], [2], etc. within the text where appropriate
-- At the end, include a "References:" section with full citations
-- Sources should be from: Mayo Clinic, American Medical Association, CDC, WebMD, Healthline, or similar reputable medical sources
-- Ensure all referenced URLs are real and working
-- Keep content under 500 words including references
-- Make it beginner-friendly and easy to understand
-- Focus on practical, actionable advice`;
+REQUIREMENTS:
+- Include 2-3 credible medical references with [1], [2] format
+- Add "References:" section with full citations
+- Use Mayo Clinic, CDC, WebMD, or Healthline sources
+- Keep under 400 words total
+- Make it beginner-friendly and actionable`;
 
   return basePrompt;
 };
@@ -198,8 +195,8 @@ router.post('/generate-dashboard', async (req, res) => {
           
           const dynamicContent = {};
           
-          // Generate content for each dynamic card
-          for (const card of dynamic_cards) {
+          // Generate content for all dynamic cards in parallel
+          const cardPromises = dynamic_cards.map(async (card) => {
             const cardPrompt = generateDynamicCardPrompt(card, userData);
             
             try {
@@ -209,17 +206,31 @@ router.post('/generate-dashboard', async (req, res) => {
                   { role: 'system', content: systemPrompt },
                   { role: 'user', content: cardPrompt }
                 ],
-                max_tokens: 600,
+                max_tokens: 400,
                 temperature: 0.7
               });
               
-              dynamicContent[card.contentKey] = response.choices[0].message.content;
               console.log(`Generated content for card: ${card.title} (${card.contentKey})`);
+              return {
+                contentKey: card.contentKey,
+                content: response.choices[0].message.content
+              };
             } catch (cardError) {
               console.error(`Error generating content for card ${card.title}:`, cardError);
-              dynamicContent[card.contentKey] = `Content for ${card.title} is temporarily unavailable. Please try again later.`;
+              return {
+                contentKey: card.contentKey,
+                content: `Content for ${card.title} is temporarily unavailable. Please try again later.`
+              };
             }
-          }
+          });
+
+          // Wait for all cards to be generated in parallel
+          const cardResults = await Promise.all(cardPromises);
+          
+          // Store results in dynamicContent
+          cardResults.forEach(result => {
+            dynamicContent[result.contentKey] = result.content;
+          });
           
           // Save AI response to database
           const aiResponseString = JSON.stringify(dynamicContent);

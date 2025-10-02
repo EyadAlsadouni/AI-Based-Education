@@ -118,22 +118,28 @@ router.post('/dashboard-card-audio', async (req, res) => {
         const dashboard = JSON.parse(row.ai_response);
         let cardContent = '';
         
-        // Get card content based on card_id
-        switch (card_id) {
-          case 'diagnosis':
-            cardContent = dashboard.diagnosis_basics || '';
-            break;
-          case 'nutrition':
-            cardContent = dashboard.nutrition_carbs || '';
-            break;
-          case 'workout':
-            cardContent = dashboard.workout || '';
-            break;
-          case 'daily_plan':
-            cardContent = dashboard.daily_plan || '';
-            break;
-          default:
-            return res.status(400).json({ error: 'Invalid card ID' });
+        // Get card content based on card_id - now supports dynamic card IDs
+        // First try to get content using the card_id as a direct key
+        if (dashboard[card_id]) {
+          cardContent = dashboard[card_id];
+        } else {
+          // Fallback to legacy static card IDs for backward compatibility
+          switch (card_id) {
+            case 'diagnosis':
+              cardContent = dashboard.diagnosis_basics || '';
+              break;
+            case 'nutrition':
+              cardContent = dashboard.nutrition_carbs || '';
+              break;
+            case 'workout':
+              cardContent = dashboard.workout || '';
+              break;
+            case 'daily_plan':
+              cardContent = dashboard.daily_plan || '';
+              break;
+            default:
+              return res.status(400).json({ error: `Card content not found for ID: ${card_id}` });
+          }
         }
 
         if (!cardContent) {

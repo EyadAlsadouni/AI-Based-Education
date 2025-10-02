@@ -12,6 +12,14 @@ import html2canvas from 'html2canvas';
 import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import AudioManager from '../../lib/useAudioManager';
 
+// Helper function to format time in MM:SS format
+const formatTime = (seconds: number): string => {
+  if (!seconds || isNaN(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 
 
 
@@ -22,6 +30,15 @@ interface ContentModalProps {
   title: string;
   content: string;
   icon: string;
+  highlightedText?: string;
+  isHighlighting?: boolean;
+  isPlaying?: boolean;
+  isPaused?: boolean;
+  isGenerating?: boolean;
+  audioDuration?: number;
+  audioCurrentTime?: number;
+  onPlayPause?: () => void;
+  onStop?: () => void;
 }
 
 const ContentModal: React.FC<ContentModalProps> = ({
@@ -29,7 +46,16 @@ const ContentModal: React.FC<ContentModalProps> = ({
   onClose,
   title,
   content,
-  icon
+  icon,
+  highlightedText = '',
+  isHighlighting = false,
+  isPlaying = false,
+  isPaused = false,
+  isGenerating = false,
+  audioDuration = 0,
+  audioCurrentTime = 0,
+  onPlayPause,
+  onStop
 }) => {
   if (!isOpen) return null;
 
@@ -57,12 +83,76 @@ const ContentModal: React.FC<ContentModalProps> = ({
                 <p className="text-sm text-gray-600">Evidence-based patient education content</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 bg-white border border-gray-300 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              ×
-            </button>
+            
+            {/* Audio Controls and Progress Bar */}
+            <div className="flex items-center space-x-4">
+              {/* Audio Progress Bar */}
+              {(isPlaying || isPaused) && audioDuration > 0 && (
+                <div className="flex items-center space-x-3">
+                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-100 ease-linear"
+                      style={{ width: `${(audioCurrentTime / audioDuration) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 font-mono">
+                    {formatTime(audioCurrentTime)} / {formatTime(audioDuration)}
+                  </span>
+                </div>
+              )}
+              
+              {/* Audio Control Buttons */}
+              {onPlayPause && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={onPlayPause}
+                    disabled={isGenerating}
+                    className={`p-2 rounded-full transition-all hover:scale-110 ${
+                      isGenerating
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : isPlaying
+                        ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                        : isPaused
+                        ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
+                        : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                    }`}
+                    title={isGenerating ? 'Generating audio...' : isPlaying ? 'Pause audio' : isPaused ? 'Resume audio' : 'Play audio'}
+                  >
+                    {isGenerating ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                    ) : isPlaying ? (
+                      <VolumeX className="h-4 w-4" />
+                    ) : isPaused ? (
+                      <Volume2 className="h-4 w-4" />
+                    ) : (
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    )}
+                  </button>
+                  
+                  {onStop && (isPlaying || isPaused) && (
+                    <button
+                      onClick={onStop}
+                      className="p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
+                      title="Stop audio"
+                    >
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 6h12v12H6z"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
+              
+              {/* Close Button */}
+              <button
+                onClick={onClose}
+                className="w-8 h-8 bg-white border border-gray-300 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
 
@@ -127,6 +217,43 @@ const ContentModal: React.FC<ContentModalProps> = ({
                   {parts.map((part, partIndex) => {
                     if (partIndex % 2 === 1) {
                       return <strong key={partIndex} className="font-bold text-gray-900">{part}</strong>;
+                    }
+                    
+                    
+                    // Apply highlighting if active - use a more subtle approach
+                    if (isHighlighting && highlightedText && highlightedText.length > 0) {
+                      const highlightedWords = highlightedText.split(' ').filter(w => w.length > 0);
+                      
+                      // Calculate global word position for this part
+                      const contentBeforeThisPart = content
+                        .split('\n')
+                        .slice(0, index)
+                        .join(' ')
+                        .replace(/\*\*(.*?)\*\*/g, '$1')
+                        .replace(/\[(\d+)\]/g, '')
+                        .replace(/https?:\/\/[^\s]+/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                      
+                      const wordsBeforeThisPart = contentBeforeThisPart.split(' ').filter(w => w.length > 0).length;
+                      
+                      // Use a single span with background highlighting for the entire part
+                      const currentWords = part.split(' ');
+                      const wordsToHighlight = Math.min(highlightedWords.length - wordsBeforeThisPart, currentWords.length);
+                      
+                      if (wordsToHighlight > 0) {
+                        const highlightedPart = currentWords.slice(0, wordsToHighlight).join(' ');
+                        const remainingPart = currentWords.slice(wordsToHighlight).join(' ');
+                        
+                        return (
+                          <span key={partIndex}>
+                            <span className="bg-yellow-200 transition-all duration-100" style={{ padding: '0 1px' }}>
+                              {highlightedPart}
+                            </span>
+                            {remainingPart && <span> {remainingPart}</span>}
+                          </span>
+                        );
+                      }
                     }
                     
                     // Check for reference numbers [1], [2], etc. and make them stand out
@@ -211,38 +338,127 @@ export const DashboardComponent: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [dashboardAudioManager] = useState(() => new AudioManager());
+  
+  // Audio progress and highlighting states
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [highlightedText, setHighlightedText] = useState<string>('');
+  const [isHighlighting, setIsHighlighting] = useState(false);
+  const [speakingRate, setSpeakingRate] = useState<number | null>(null);
 
   // Audio event handlers for voice reading
   useEffect(() => {
     const handleStart = () => {
       setIsPlaying(true);
       setIsPaused(false);
-      console.log('[Dashboard AudioManager] start');
+      setIsHighlighting(true);
+      setHighlightedText(''); // Reset highlighting
+      setSpeakingRate(null); // Reset speaking rate for new audio
+      console.log('[Dashboard AudioManager] start - highlighting enabled');
     };
     const handleEnd = () => {
       setIsPlaying(false);
       setIsPaused(false);
       setPlayingCardId(null);
+      setIsHighlighting(false);
+      setHighlightedText('');
       console.log('[Dashboard AudioManager] end');
     };
     const handleError = (err: any) => {
       setIsPlaying(false);
       setIsPaused(false);
       setPlayingCardId(null);
+      setIsHighlighting(false);
+      setHighlightedText('');
       setError('Failed to play audio');
       console.log('[Dashboard AudioManager] error', err);
+    };
+    const handleProgress = (currentTime: number, duration: number) => {
+      setAudioCurrentTime(currentTime);
+      setAudioDuration(duration);
+      
+      // Improved text highlighting with better audio sync
+      if (isHighlighting && selectedCard && duration > 0) {
+        const content = selectedCard.content;
+        
+        // Clean the content for better word counting (remove markdown, references, etc.)
+        const cleanContent = content
+          .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown
+          .replace(/\[(\d+)\]/g, '') // Remove reference numbers
+          .replace(/https?:\/\/[^\s]+/g, '') // Remove URLs
+          .replace(/\n+/g, ' ') // Replace newlines with spaces
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim();
+        
+        const words = cleanContent.split(' ').filter(word => word.length > 0);
+        
+        // Use a more sophisticated progress calculation
+        const progressRatio = Math.min(currentTime / duration, 1);
+        
+        // Calculate actual speaking rate if we have enough data
+        if (currentTime > 2 && words.length > 0) {
+          const currentWordsPerSecond = (words.length * progressRatio) / currentTime;
+          if (!speakingRate || Math.abs(currentWordsPerSecond - speakingRate) > 0.5) {
+            setSpeakingRate(currentWordsPerSecond);
+          }
+        }
+        
+        // Use adaptive highlighting based on actual speaking rate
+        let adjustedRatio = progressRatio;
+        
+        if (speakingRate && speakingRate > 0) {
+          // Use the actual speaking rate to calculate expected progress
+          const expectedWords = Math.floor(currentTime * speakingRate);
+          const expectedRatio = Math.min(expectedWords / words.length, 1);
+          
+          // Blend the linear progress with the speaking rate based progress
+          adjustedRatio = (progressRatio * 0.3) + (expectedRatio * 0.7);
+        } else {
+          // Fallback to adjusted linear progress
+          // Early in the audio (first 15%), be more conservative
+          if (progressRatio < 0.15) {
+            adjustedRatio = progressRatio * 0.7;
+          }
+          // Middle section (15% to 85%), use normal progression
+          else if (progressRatio < 0.85) {
+            adjustedRatio = 0.105 + (progressRatio - 0.15) * 1.0;
+          }
+          // End section (last 15%), slow down
+          else {
+            adjustedRatio = 0.805 + (progressRatio - 0.85) * 0.6;
+          }
+        }
+        
+        // Ensure we don't go beyond 100%
+        adjustedRatio = Math.min(adjustedRatio, 1);
+        
+        const wordsToHighlight = Math.floor(adjustedRatio * words.length);
+        
+        // Get the highlighted text with proper spacing
+        const highlightedWords = words.slice(0, wordsToHighlight);
+        setHighlightedText(highlightedWords.join(' '));
+        
+        console.log(`Highlighting: ${wordsToHighlight}/${words.length} words (${(progressRatio * 100).toFixed(1)}% -> ${(adjustedRatio * 100).toFixed(1)}%) [Rate: ${speakingRate?.toFixed(1) || 'N/A'} wps]`);
+      }
+    };
+    const handleDuration = (duration: number) => {
+      setAudioDuration(duration);
     };
     
     dashboardAudioManager.on('start', handleStart);
     dashboardAudioManager.on('end', handleEnd);
     dashboardAudioManager.on('error', handleError);
+    dashboardAudioManager.on('progress', handleProgress);
+    dashboardAudioManager.on('duration', handleDuration);
     
     return () => {
       dashboardAudioManager.off('start', handleStart);
       dashboardAudioManager.off('end', handleEnd);
       dashboardAudioManager.off('error', handleError);
+      dashboardAudioManager.off('progress', handleProgress);
+      dashboardAudioManager.off('duration', handleDuration);
     };
-  }, [dashboardAudioManager]);
+  }, [dashboardAudioManager, isHighlighting, selectedCard]);
 
   // Check if user has completed all steps
   useEffect(() => {
@@ -299,6 +515,7 @@ export const DashboardComponent: React.FC = () => {
         if (generatedCards && generatedCards.length > 0) {
           console.log('Dynamic cards present, will generate new content instead of loading existing');
           // Generate content immediately with the cards we just created
+          setGeneratingContent(true);
           try {
             console.log('=== FRONTEND: Starting AI dashboard generation ===');
             console.log('User ID:', storedUserId);
@@ -332,6 +549,8 @@ export const DashboardComponent: React.FC = () => {
             };
             console.log('Using fallback content:', fallbackContent);
             setDashboardContent(fallbackContent);
+          } finally {
+            setGeneratingContent(false);
           }
         } else {
           try {
@@ -681,7 +900,7 @@ export const DashboardComponent: React.FC = () => {
             
             <div className="p-6">
               {dashboardContent ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-6">
                   {(dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).map((card) => {
                     let content = '';
                     
@@ -718,32 +937,32 @@ export const DashboardComponent: React.FC = () => {
                     return (
                       <div
                         key={card.id}
-                        className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-gray-50 hover:bg-white hover:scale-[1.02] relative"
+                        className="p-6 border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer bg-gray-50 hover:bg-white hover:scale-[1.01] relative"
                         onClick={() => handleCardClick(card.id)}
                       >
-                        <div className="flex items-start space-x-3">
-                          <div className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center text-lg">
+                        <div className="flex items-start space-x-4">
+                          <div className="w-14 h-14 bg-white rounded-xl border border-gray-200 flex items-center justify-center text-2xl">
                             {card.icon}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 mb-1">{card.title}</h3>
-                            <p className="text-sm text-gray-600 mb-2">{card.description}</p>
+                            <h3 className="text-xl font-bold text-gray-900 mb-2">{card.title}</h3>
+                            <p className="text-base text-gray-600 mb-4">{card.description}</p>
                             <div className="flex items-center justify-between">
-                              <div className="text-xs text-blue-600 font-medium">
+                              <div className="text-sm text-blue-600 font-medium">
                                 Click to explore →
                               </div>
                               {isCardGenerating && (
-                                <div className="text-xs text-blue-600 font-medium">
+                                <div className="text-sm text-blue-600 font-medium">
                                   Generating audio...
                                 </div>
                               )}
                               {isCardPlaying && (
-                                <div className="text-xs text-green-600 font-medium">
+                                <div className="text-sm text-green-600 font-medium">
                                   Playing...
                                 </div>
                               )}
                               {isCardPaused && (
-                                <div className="text-xs text-amber-600 font-medium">
+                                <div className="text-sm text-amber-600 font-medium">
                                   Paused
                                 </div>
                               )}
@@ -751,11 +970,11 @@ export const DashboardComponent: React.FC = () => {
                           </div>
                         </div>
                         
-                        {/* Microphone Icon */}
+                        {/* Play Button */}
                         <button
                           onClick={(e) => handleVoiceRead(card.id, e)}
                           disabled={isCardGenerating}
-                          className={`absolute top-3 right-3 p-2 rounded-full transition-all hover:scale-110 cursor-pointer ${
+                          className={`absolute top-4 right-4 p-3 rounded-full transition-all hover:scale-110 cursor-pointer ${
                             isCardGenerating
                               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                               : isCardPlaying
@@ -767,13 +986,15 @@ export const DashboardComponent: React.FC = () => {
                           title={isCardGenerating ? 'Generating audio...' : isCardPlaying ? 'Pause audio' : isCardPaused ? 'Resume audio' : 'Play audio'}
                         >
                           {isCardGenerating ? (
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
                           ) : isCardPlaying ? (
-                            <VolumeX className="h-4 w-4" />
+                            <VolumeX className="h-5 w-5" />
                           ) : isCardPaused ? (
-                            <Volume2 className="h-4 w-4" />
+                            <Volume2 className="h-5 w-5" />
                           ) : (
-                            <Mic className="h-4 w-4" />
+                            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z"/>
+                            </svg>
                           )}
                         </button>
                       </div>
@@ -1009,6 +1230,9 @@ export const DashboardComponent: React.FC = () => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <svg className="h-4 w-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
               <span className="text-sm text-gray-700">
                 Playing: {(dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.id === playingCardId)?.title}
               </span>
@@ -1046,6 +1270,28 @@ export const DashboardComponent: React.FC = () => {
         title={selectedCard?.title || ''}
         content={selectedCard?.content || ''}
         icon={selectedCard?.icon || ''}
+        highlightedText={highlightedText}
+        isHighlighting={isHighlighting && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
+        isPlaying={isPlaying && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
+        isPaused={isPaused && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
+        isGenerating={isGenerating && selectedCard && playingCardId === (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title)?.id}
+        audioDuration={audioDuration}
+        audioCurrentTime={audioCurrentTime}
+        onPlayPause={() => {
+          if (selectedCard) {
+            // Find the card ID that matches the selected card title
+            const card = (dynamicCards.length > 0 ? dynamicCards : DASHBOARD_CARDS).find(c => c.title === selectedCard.title);
+            if (card) {
+              handleVoiceRead(card.id, { stopPropagation: () => {} } as any);
+            }
+          }
+        }}
+        onStop={() => {
+          dashboardAudioManager.stop();
+          setIsPlaying(false);
+          setIsPaused(false);
+          setPlayingCardId(null);
+        }}
       />
     </div>
   );

@@ -31,6 +31,9 @@ class AudioManager {
   private isPlaying = false;
   private isPaused = false;
   private currentUrl: string | null = null;
+  private duration = 0;
+  private currentTime = 0;
+  private progressInterval: NodeJS.Timeout | null = null;
 
   private constructor() {}
 
@@ -45,23 +48,50 @@ class AudioManager {
     if (!this.audioElement) {
       this.audioElement = new Audio();
       this.audioElement.preload = 'auto';
-      this.audioElement.onplay = () => this.eventEmitter.emit('start');
+      this.audioElement.onplay = () => {
+        this.eventEmitter.emit('start');
+        this.startProgressTracking();
+      };
       this.audioElement.onpause = () => {
         if (this.isPlaying) {
           // User-initiated pause or programmatic pause
           this.eventEmitter.emit('pause');
         }
+        this.stopProgressTracking();
       };
       this.audioElement.onended = () => {
         this.isPlaying = false;
         this.isPaused = false;
+        this.stopProgressTracking();
         this.eventEmitter.emit('end');
       };
       this.audioElement.onerror = (err) => {
         this.isPlaying = false;
         this.isPaused = false;
+        this.stopProgressTracking();
         this.eventEmitter.emit('error', err);
       };
+      this.audioElement.onloadedmetadata = () => {
+        this.duration = this.audioElement?.duration || 0;
+        this.eventEmitter.emit('duration', this.duration);
+      };
+    }
+  }
+
+  private startProgressTracking() {
+    this.stopProgressTracking(); // Clear any existing interval
+    this.progressInterval = setInterval(() => {
+      if (this.audioElement) {
+        this.currentTime = this.audioElement.currentTime;
+        this.eventEmitter.emit('progress', this.currentTime, this.duration);
+      }
+    }, 50); // Update every 50ms for smoother highlighting
+  }
+
+  private stopProgressTracking() {
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
     }
   }
 
@@ -92,6 +122,8 @@ class AudioManager {
       this.audioElement.currentTime = 0;
       this.isPlaying = false;
       this.isPaused = false;
+      this.stopProgressTracking();
+      this.currentTime = 0;
       this.eventEmitter.emit('end');
     }
   }
@@ -119,11 +151,11 @@ class AudioManager {
     }
   }
 
-  public on(event: 'start' | 'pause' | 'end' | 'error', handler: (...args: any[]) => void) {
+  public on(event: 'start' | 'pause' | 'end' | 'error' | 'progress' | 'duration', handler: (...args: any[]) => void) {
     this.eventEmitter.on(event, handler);
   }
 
-  public off(event: 'start' | 'pause' | 'end' | 'error', handler: (...args: any[]) => void) {
+  public off(event: 'start' | 'pause' | 'end' | 'error' | 'progress' | 'duration', handler: (...args: any[]) => void) {
     this.eventEmitter.off(event, handler);
   }
 
@@ -137,6 +169,21 @@ class AudioManager {
 
   public getCurrentUrl() {
     return this.currentUrl;
+  }
+
+  public getDuration() {
+    return this.duration;
+  }
+
+  public getCurrentTime() {
+    return this.currentTime;
+  }
+
+  public seekTo(time: number) {
+    if (this.audioElement) {
+      this.audioElement.currentTime = time;
+      this.currentTime = time;
+    }
   }
 }
 

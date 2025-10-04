@@ -49,6 +49,10 @@ export const Step1Component: React.FC = () => {
     updateFormData('health_goals', updatedGoals);
   };
 
+  const handleClearHealthGoals = () => {
+    updateFormData('health_goals', []);
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof Step1FormData, string>> = {};
 
@@ -192,6 +196,21 @@ export const Step1Component: React.FC = () => {
             </div>
             {errors.health_goals && (
               <p className="text-sm text-red-600">{errors.health_goals}</p>
+            )}
+            
+            {/* Clear Selection Button */}
+            {formData.health_goals.length > 0 && (
+              <div className="mt-3 text-center">
+                <Button
+                  variant="outline"
+                  onClick={handleClearHealthGoals}
+                  disabled={loading}
+                  className="text-sm text-gray-600 hover:text-gray-800 border-gray-300 hover:border-gray-400"
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
+              </div>
             )}
           </div>
 

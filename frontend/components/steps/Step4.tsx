@@ -164,6 +164,12 @@ export const Step4Component: React.FC = () => {
     }
   };
 
+  const handleClearGoals = () => {
+    updateFormData('main_goal', []);
+    setShowCustomGoal(false);
+    setCustomGoal('');
+  };
+
   // Function to check if question contains medical advice requests
   const containsMedicalAdvice = (question: string): boolean => {
     const medicalAdviceKeywords = [
@@ -370,6 +376,21 @@ export const Step4Component: React.FC = () => {
             {errors.main_goal && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-600">{errors.main_goal}</p>
+              </div>
+            )}
+            
+            {/* Clear Selection Button */}
+            {formData.main_goal.length > 0 && (
+              <div className="mt-3 text-center">
+                <Button
+                  variant="outline"
+                  onClick={handleClearGoals}
+                  disabled={loading}
+                  className="text-sm text-gray-600 hover:text-gray-800 border-gray-300 hover:border-gray-400"
+                  size="sm"
+                >
+                  Clear Selection
+                </Button>
               </div>
             )}
           </div>

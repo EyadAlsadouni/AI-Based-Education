@@ -81,13 +81,12 @@ export const Step2Component: React.FC = () => {
     }
   }, [userHealthGoals]);
 
-  // Load saved selection
+  // Clear any previous selection to start fresh
   useEffect(() => {
-    const savedData = formStorage.getFormData<{ selectedCondition?: string }>();
-    console.log('Step2 - Loading saved selection:', savedData);
-    if (savedData?.selectedCondition) {
-      setSelectedCondition(savedData.selectedCondition);
-    }
+    console.log('Step2 - Clearing previous selection to start fresh');
+    formStorage.clearFormField('selectedCondition');
+    setSelectedCondition('');
+    setError('');
   }, []);
 
   // Load all saved form data on mount
@@ -111,8 +110,13 @@ export const Step2Component: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    console.log('Step2 - handleContinue called, selectedCondition:', selectedCondition);
+    
     if (!selectedCondition) {
+      console.log('Step2 - No condition selected, showing error');
       setError('Please select a condition to continue');
+      // Scroll to top to show error
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -122,6 +126,7 @@ export const Step2Component: React.FC = () => {
     }
 
     setLoading(true);
+    setError(''); // Clear any previous errors
 
     try {
       // Save condition selection to user session
@@ -142,6 +147,13 @@ export const Step2Component: React.FC = () => {
 
   const handleBack = () => {
     router.push('/step-1');
+  };
+
+  const handleClearSelection = () => {
+    console.log('Step2 - Clearing selection manually');
+    setSelectedCondition('');
+    setError('');
+    formStorage.clearFormField('selectedCondition');
   };
 
   if (loadingConditions) {
@@ -213,8 +225,23 @@ export const Step2Component: React.FC = () => {
 
       {/* Condition Selection Form */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+        {/* Error Message - Show at top for visibility */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-lg animate-pulse">
+            <div className="flex items-center space-x-3">
+              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-red-600 text-sm font-bold">!</span>
+              </div>
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Available Conditions</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Which condition would you like to learn about?
+            <span className="text-red-500 ml-1">*</span>
+          </h3>
           <p className="text-gray-600">Choose the condition that best matches your health education needs.</p>
         </div>
 
@@ -252,41 +279,48 @@ export const Step2Component: React.FC = () => {
           ))}
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
-                <span className="text-red-600 text-sm">!</span>
-              </div>
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        )}
+         {/* Clear Selection Button */}
+         {selectedCondition && (
+           <div className="mb-4 text-center">
+             <Button
+               variant="outline"
+               onClick={handleClearSelection}
+               disabled={loading}
+               className="text-sm text-gray-600 hover:text-gray-800 border-gray-300 hover:border-gray-400"
+               size="sm"
+             >
+               Clear Selection
+             </Button>
+           </div>
+         )}
 
-        {/* Navigation Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={loading}
-            className="order-2 sm:order-1 hover:bg-gray-50"
-          >
-            <span className="mr-2">←</span>
-            Back to Patient Information
-          </Button>
-          
-          <Button
-            onClick={handleContinue}
-            loading={loading}
-            disabled={!selectedCondition || loading}
-            className="order-1 sm:order-2 bg-blue-600 hover:bg-blue-700"
-            size="lg"
-          >
-            <span className="mr-2">→</span>
-            Continue to Health Assessment
-          </Button>
-        </div>
+         {/* Navigation Buttons */}
+         <div className="flex flex-col sm:flex-row gap-4 justify-between pt-6">
+           <Button
+             variant="outline"
+             onClick={handleBack}
+             disabled={loading}
+             className="order-2 sm:order-1 hover:bg-gray-50"
+           >
+             <span className="mr-2">←</span>
+             Back to Patient Information
+           </Button>
+           
+           <Button
+             onClick={handleContinue}
+             loading={loading}
+             disabled={!selectedCondition || loading}
+             className={`order-1 sm:order-2 ${
+               !selectedCondition 
+                 ? 'bg-gray-400 cursor-not-allowed' 
+                 : 'bg-blue-600 hover:bg-blue-700'
+             }`}
+             size="lg"
+           >
+             <span className="mr-2">→</span>
+             {!selectedCondition ? 'Select a condition to continue' : 'Continue to Health Assessment'}
+           </Button>
+         </div>
       </div>
 
       {/* Progress Indicator */}

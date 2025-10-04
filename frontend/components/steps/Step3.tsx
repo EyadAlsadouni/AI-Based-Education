@@ -53,6 +53,11 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
     onFormDataChange('main_interests', updatedInterests);
   };
 
+  const handleClearInterests = () => {
+    onFormDataChange('main_interests', []);
+    onFormDataChange('other_knowledge', '');
+  };
+
   return (
     <div className="space-y-8">
       {/* Knowledge Level */}
@@ -123,6 +128,20 @@ const LearningDiscovery: React.FC<LearningDiscoveryProps> = ({
         </div>
         {errors.main_interests && (
           <p className="text-sm text-red-600 mt-2">{errors.main_interests}</p>
+        )}
+        
+        {/* Clear Selection Button */}
+        {formData.main_interests.length > 0 && (
+          <div className="mt-3 text-center">
+            <Button
+              variant="outline"
+              onClick={handleClearInterests}
+              className="text-sm text-gray-600 hover:text-gray-800 border-gray-300 hover:border-gray-400"
+              size="sm"
+            >
+              Clear Selection
+            </Button>
+          </div>
         )}
       </div>
 

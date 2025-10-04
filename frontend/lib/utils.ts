@@ -108,6 +108,13 @@ export const formStorage = {
     storage.remove(STORAGE_KEYS.USER_ID);
     storage.remove(STORAGE_KEYS.CURRENT_STEP);
     storage.remove(STORAGE_KEYS.FORM_DATA);
+  },
+
+  // Clear specific form field
+  clearFormField: (field: string): void => {
+    const existingData = storage.getJSON(STORAGE_KEYS.FORM_DATA) || {};
+    delete existingData[field];
+    storage.setJSON(STORAGE_KEYS.FORM_DATA, existingData);
   }
 };
 

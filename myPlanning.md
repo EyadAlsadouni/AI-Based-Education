@@ -661,6 +661,34 @@ backend/
 8. ✅ **Interest-Based Filtering**: Cards align with what user expressed interest in
 9. ✅ **Fallback System**: Default cards if generation fails or no preferences specified
 
+## Current Tasks - October 4, 2025
+
+### Task: Make Step 2 Condition Selection Required with Validation
+**Objective**: Add proper validation to Step 2 so users see an error message if they try to continue without selecting a condition, matching the validation pattern used in Steps 1, 3, and 4.
+
+#### Subtasks:
+- ✅ Remove button disable condition based on selection
+- ✅ Add required red asterisk (*) to the question heading
+- ✅ Update question text to be more clear: "Which condition would you like to learn about?"
+- ✅ Keep validation logic in handleContinue function
+- ✅ Ensure error message displays correctly when user clicks Continue without selection
+- ✅ Verify button behavior matches other steps
+
+**Changes Made**:
+1. ✅ Changed heading from "Available Conditions" to "Which condition would you like to learn about? *" with red asterisk
+2. ✅ Removed `!selectedCondition` from button's `disabled` prop
+3. ✅ Moved error message to TOP of form (above question) for maximum visibility
+4. ✅ Enhanced error styling with:
+   - Thicker red border (border-2)
+   - Animate-pulse effect to draw attention
+   - Font-medium for better readability
+   - Bold exclamation mark
+5. ✅ Added console.log debugging to track validation
+6. ✅ Added window.scrollTo to ensure error is visible when shown
+7. ✅ Removed duplicate error message that was below condition grid
+
+**Status**: ✅ COMPLETED - Step 2 now has required asterisk and shows a prominent red error message at the top when Continue is clicked without selecting a condition. The error message is highly visible with animation and appears above all form content.
+
 ## Project Status - October 2025
 
 ### ✅ Completed Features:
@@ -686,6 +714,12 @@ The project is in excellent condition with all major features implemented and wo
 3. **Dynamic Card System**: 25+ card types covering all user scenarios
 4. **Voice Integration**: Seamless voice reading and push-to-talk functionality
 5. **Medical Safety**: Robust medical advice prevention and validation
+6. **Enhanced Step 2 Validation**: Made condition selection required with clear visual indicators
+7. **Clear Selection Buttons**: Added to all steps for better user experience
+   - Step 1: Clear health goals selection
+   - Step 2: Clear condition selection
+   - Step 3: Clear main interests selection
+   - Step 4: Clear main goals selection
 
 ### Next Steps for Future Development:
 1. **Enhanced Personalization**: Even more granular content based on user responses

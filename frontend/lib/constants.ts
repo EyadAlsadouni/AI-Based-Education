@@ -668,7 +668,7 @@ export const generateDashboardCards = (
     }));
   }
   
-  // Filter cards based on user's main interests and goals
+  // CORRECTED LOGIC: Filter cards based on knowledge gaps and goals
   const relevantCards = baseCards.filter(card => {
     const cardKeywords = card.title.toLowerCase() + ' ' + card.description.toLowerCase();
     
@@ -676,13 +676,56 @@ export const generateDashboardCards = (
     const interestsArray = Array.isArray(mainInterests) ? mainInterests : (mainInterests ? [mainInterests] : []);
     const goalsArray = Array.isArray(mainGoals) ? mainGoals : (mainGoals ? [mainGoals] : []);
     
-    const userInterests = interestsArray.join(' ').toLowerCase();
-    const userGoals = goalsArray.join(' ').toLowerCase();
+    // STEP 1: EXCLUDE cards for topics user already knows (mainInterests from Step 3)
+    const isAlreadyKnown = interestsArray.some(interest => {
+      const interestLower = interest.toLowerCase();
+      return cardKeywords.includes(interestLower) || 
+             (interestLower.includes('meal') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
+             (interestLower.includes('nutrition') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
+             (interestLower.includes('diet') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
+             (interestLower.includes('complication') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent'))) ||
+             (interestLower.includes('prevent') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent'))) ||
+             (interestLower.includes('exercise') && (cardKeywords.includes('exercise') || cardKeywords.includes('workout'))) ||
+             (interestLower.includes('medication') && (cardKeywords.includes('medication') || cardKeywords.includes('drug'))) ||
+             (interestLower.includes('blood sugar') && (cardKeywords.includes('blood') || cardKeywords.includes('glucose'))) ||
+             (interestLower.includes('monitoring') && (cardKeywords.includes('monitoring') || cardKeywords.includes('track'))) ||
+             (interestLower.includes('injection') && (cardKeywords.includes('injection') || cardKeywords.includes('technique'))) ||
+             (interestLower.includes('inhaler') && (cardKeywords.includes('inhaler') || cardKeywords.includes('breathing')));
+    });
     
-    // Include card if it matches user interests, goals, or is high priority
-    return cardKeywords.includes(userInterests) || 
-           cardKeywords.includes(userGoals) || 
-           card.priority <= 3; // Always include high priority cards
+    if (isAlreadyKnown) {
+      console.log(`Excluding card "${card.title}" - user already knows this topic`);
+      return false;
+    }
+    
+    // STEP 2: INCLUDE cards that support user goals (mainGoals from Step 4)
+    const supportsGoals = goalsArray.some(goal => {
+      const goalLower = goal.toLowerCase();
+      return cardKeywords.includes(goalLower) ||
+             (goalLower.includes('blood sugar') && (cardKeywords.includes('blood') || cardKeywords.includes('glucose'))) ||
+             (goalLower.includes('lower') && (cardKeywords.includes('blood') || cardKeywords.includes('glucose'))) ||
+             (goalLower.includes('exercise') && (cardKeywords.includes('exercise') || cardKeywords.includes('workout'))) ||
+             (goalLower.includes('activity') && (cardKeywords.includes('exercise') || cardKeywords.includes('workout'))) ||
+             (goalLower.includes('medication') && (cardKeywords.includes('medication') || cardKeywords.includes('drug'))) ||
+             (goalLower.includes('monitoring') && (cardKeywords.includes('monitoring') || cardKeywords.includes('track'))) ||
+             (goalLower.includes('technique') && (cardKeywords.includes('technique') || cardKeywords.includes('injection') || cardKeywords.includes('inhaler'))) ||
+             (goalLower.includes('management') && (cardKeywords.includes('management') || cardKeywords.includes('daily'))) ||
+             (goalLower.includes('prevent') && (cardKeywords.includes('prevent') || cardKeywords.includes('complication'))) ||
+             (goalLower.includes('complication') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent')));
+    });
+    
+    if (supportsGoals) {
+      console.log(`Including card "${card.title}" - supports user goals`);
+      return true;
+    }
+    
+    // STEP 3: Include high-priority cards only if they don't match known topics
+    if (card.priority <= 2) {
+      console.log(`Including card "${card.title}" - high priority and not known topic`);
+      return true;
+    }
+    
+    return false;
   });
   
   // Sort by priority (lower number = higher priority) and limit to 5 cards

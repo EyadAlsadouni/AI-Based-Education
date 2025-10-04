@@ -70,7 +70,7 @@ const ContentModal: React.FC<ContentModalProps> = ({
       className="fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       onClick={handleOverlayClick}
     >
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[85vh] overflow-hidden shadow-2xl border border-gray-200">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-200 flex flex-col">
         {/* Modal Header */}
         <div className="bg-gray-50 border-b border-gray-200 p-6">
           <div className="flex items-center justify-between">
@@ -157,8 +157,9 @@ const ContentModal: React.FC<ContentModalProps> = ({
         </div>
 
         {/* Modal Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-          <div className="prose prose-gray max-w-none">
+        <div className="flex-1 p-6 overflow-y-auto min-h-0" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+          <div className="prose prose-gray max-w-none pb-8">
+            {console.log('ContentModal - Content length:', content.length, 'Content preview:', content.substring(0, 200) + '...')}
             {content.split('\n').map((paragraph, index) => {
               if (paragraph.trim() === '') return null;
               

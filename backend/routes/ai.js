@@ -50,6 +50,8 @@ IMPORTANT GUIDELINES:
 
 IMPORTANT: Generate content that is specific to the requested card topic only. Do not include generic card titles or structures. Focus on providing educational content that directly addresses the specific card's title and description.
 
+CRITICAL: Every response MUST include a "References:" section with 2-3 real, working URLs from trusted medical sources (Mayo Clinic, CDC, ADA, AHA, WebMD, Healthline). Use [1], [2], [3] format in the text and provide full citations with working URLs.
+
 Keep responses informative but conversational, and always maintain a supportive tone.`;
 };
 
@@ -68,7 +70,32 @@ User's Main Interests: ${mainInterests}
 User's Main Goals: ${mainGoals}
 Knowledge Level: ${userData.knowledge_level || 'new'}
 
+IMPORTANT: This card was selected because the user has a KNOWLEDGE GAP in this area. 
+The user's main interests (${mainInterests}) represent what they already know, so this content 
+should focus on what they DON'T know about ${card.title}.
+
 Content Requirements:`;
+
+  // Adapt content depth based on knowledge level
+  if (userData.knowledge_level === 'new') {
+    basePrompt += `
+- Start with basic concepts and fundamentals
+- Explain terminology and key concepts clearly
+- Provide step-by-step guidance for beginners
+- Include "what you need to know first" information`;
+  } else if (userData.knowledge_level === 'some') {
+    basePrompt += `
+- Build on existing knowledge with intermediate concepts
+- Focus on practical application and implementation
+- Include troubleshooting and common challenges
+- Provide actionable strategies and tips`;
+  } else if (userData.knowledge_level === 'experienced') {
+    basePrompt += `
+- Focus on advanced strategies and optimization
+- Include latest research and best practices
+- Provide nuanced insights and expert-level information
+- Address complex scenarios and edge cases`;
+  }
 
   // Adapt content based on learning style
   if (learningStyle === 'videos') {
@@ -128,13 +155,33 @@ CRITICAL INSTRUCTIONS:
 - Write content that directly addresses the card's description: ${card.description}
 - Do not include introductory phrases that reference other card types
 
-REQUIREMENTS:
-- Include 2-3 credible medical references with [1], [2] format
-- Add "References:" section with full citations
-- Use Mayo Clinic, CDC, WebMD, or Healthline sources
-- Keep under 400 words total
+MANDATORY REQUIREMENTS:
+- ALWAYS include 2-3 credible medical references with [1], [2], [3] format in the text
+- ALWAYS add a "References:" section at the end with full citations and working URLs
+- Use ONLY these trusted sources with their exact URLs:
+  * Mayo Clinic: https://www.mayoclinic.org/
+  * CDC (Centers for Disease Control): https://www.cdc.gov/
+  * American Diabetes Association: https://diabetes.org/
+  * American Heart Association: https://www.heart.org/
+  * WebMD: https://www.webmd.com/
+  * Healthline: https://www.healthline.com/
+- Ensure ALL URLs are real and accessible (test them)
+- Keep under 500 words total (you have enough tokens to include complete content and references)
 - Make it beginner-friendly and actionable
-- Write as a single, focused piece of content about ${card.title}`;
+- Write as a single, focused piece of content about ${card.title}
+
+EXAMPLE REFERENCE FORMAT:
+References:
+[1] Mayo Clinic. "Diabetes management: How lifestyle affects blood sugar." https://www.mayoclinic.org/diseases-conditions/diabetes/in-depth/diabetes-management/art-20047963
+[2] CDC. "Managing Diabetes." https://www.cdc.gov/diabetes/managing/index.html
+
+IMPORTANT: 
+- Use the EXACT URLs provided above for each organization
+- Ensure URLs are complete and include the full path
+- Test that URLs are accessible and lead to relevant content
+- Always end your response with the References section
+- DO NOT cut off mid-sentence - ensure your response is complete
+- The References section is MANDATORY and must be included`;
 
   return basePrompt;
 };
@@ -172,7 +219,66 @@ const sanitizeAIContent = (content, cardTitle = '') => {
   // Collapse excessive blank lines
   sanitized = sanitized.replace(/\n{3,}/g, '\n\n');
 
+  // Validate that references are present
+  const hasReferences = sanitized.toLowerCase().includes('references:') || 
+                       sanitized.includes('[1]') || 
+                       sanitized.includes('[2]') || 
+                       sanitized.includes('[3]');
+  
+  if (!hasReferences) {
+    console.warn(`Warning: Generated content for "${cardTitle}" is missing references`);
+    // Add a note to the content about missing references
+    sanitized += '\n\nNote: References are being generated. Please refresh to see complete citations.';
+  }
+
   return sanitized;
+};
+
+// Add fallback references if missing
+const ensureReferences = (content, cardTitle, condition) => {
+  if (!content || typeof content !== 'string') return content;
+  
+  const hasReferences = content.toLowerCase().includes('references:') || 
+                       content.includes('[1]') || 
+                       content.includes('[2]') || 
+                       content.includes('[3]');
+  
+  if (!hasReferences) {
+    console.log(`Adding fallback references for: ${cardTitle}`);
+    
+    // Generate condition-specific fallback references
+    let fallbackRefs = '';
+    if (condition.toLowerCase().includes('diabetes')) {
+      fallbackRefs = `
+References:
+[1] Mayo Clinic. "Diabetes management: How lifestyle affects blood sugar." https://www.mayoclinic.org/diseases-conditions/diabetes/in-depth/diabetes-management/art-20047963
+[2] CDC. "Managing Diabetes." https://www.cdc.gov/diabetes/managing/index.html
+[3] American Diabetes Association. "Living with Diabetes." https://diabetes.org/living-with-diabetes`;
+    } else if (condition.toLowerCase().includes('heart') || condition.toLowerCase().includes('blood pressure')) {
+      fallbackRefs = `
+References:
+[1] Mayo Clinic. "High blood pressure (hypertension)." https://www.mayoclinic.org/diseases-conditions/high-blood-pressure/symptoms-causes/syc-20373410
+[2] American Heart Association. "Understanding Blood Pressure Readings." https://www.heart.org/en/health-topics/high-blood-pressure/understanding-blood-pressure-readings
+[3] CDC. "High Blood Pressure." https://www.cdc.gov/bloodpressure/index.htm`;
+    } else if (condition.toLowerCase().includes('asthma') || condition.toLowerCase().includes('respiratory')) {
+      fallbackRefs = `
+References:
+[1] Mayo Clinic. "Asthma." https://www.mayoclinic.org/diseases-conditions/asthma/symptoms-causes/syc-20369653
+[2] CDC. "Asthma." https://www.cdc.gov/asthma/default.htm
+[3] American Lung Association. "Learn About Asthma." https://www.lung.org/lung-health-diseases/lung-disease-lookup/asthma/learn-about-asthma`;
+    } else {
+      // Generic fallback
+      fallbackRefs = `
+References:
+[1] Mayo Clinic. "Patient Care & Health Information." https://www.mayoclinic.org/patient-care-and-health-information
+[2] CDC. "Health Topics A-Z." https://www.cdc.gov/health-topics.html
+[3] WebMD. "Health & Balance." https://www.webmd.com/balance/default.htm`;
+    }
+    
+    return content + fallbackRefs;
+  }
+  
+  return content;
 };
 
 // POST /api/ai/generate-dashboard - Generate AI-powered dashboard content
@@ -246,14 +352,52 @@ router.post('/generate-dashboard', async (req, res) => {
                   { role: 'system', content: systemPrompt },
                   { role: 'user', content: cardPrompt }
                 ],
-                max_tokens: 400,
+                max_tokens: 600,
                 temperature: 0.7
               });
               
               console.log(`Generated content for card: ${card.title} (${card.contentKey})`);
+              console.log(`Raw AI response length: ${response.choices[0].message.content.length} characters`);
+              console.log(`Raw AI response preview: ${response.choices[0].message.content.substring(0, 300)}...`);
+              console.log(`Raw AI response ends with: ...${response.choices[0].message.content.slice(-200)}`);
+              
+              // Check if response was truncated due to token limit
+              let finalContent = response.choices[0].message.content;
+              if (response.choices[0].finish_reason === 'length') {
+                console.warn(`WARNING: AI response for ${card.title} was truncated due to token limit!`);
+                console.log('Attempting to complete the response...');
+                
+                try {
+                  // Make a second API call to complete the response
+                  const completionResponse = await openai.chat.completions.create({
+                    model: 'gpt-4',
+                    messages: [
+                      { role: 'system', content: systemPrompt },
+                      { role: 'user', content: cardPrompt },
+                      { role: 'assistant', content: finalContent },
+                      { role: 'user', content: 'Please complete the previous response, especially the References section with working URLs.' }
+                    ],
+                    max_tokens: 300,
+                    temperature: 0.7
+                  });
+                  
+                  finalContent += completionResponse.choices[0].message.content;
+                  console.log(`Completed response length: ${finalContent.length} characters`);
+                } catch (completionError) {
+                  console.error('Error completing truncated response:', completionError);
+                }
+              }
+              
+              const sanitizedContent = sanitizeAIContent(response.choices[0].message.content, card.title);
+              console.log(`Sanitized content length: ${sanitizedContent.length} characters`);
+              
+              const contentWithReferences = ensureReferences(sanitizedContent, card.title, userData.condition_selected);
+              console.log(`Final content length: ${contentWithReferences.length} characters`);
+              console.log(`Final content ends with: ...${contentWithReferences.slice(-200)}`);
+              
               return {
                 contentKey: card.contentKey,
-              content: sanitizeAIContent(response.choices[0].message.content, card.title)
+                content: contentWithReferences
               };
             } catch (cardError) {
               console.error(`Error generating content for card ${card.title}:`, cardError);
@@ -270,11 +414,15 @@ router.post('/generate-dashboard', async (req, res) => {
           // Store results in dynamicContent
           cardResults.forEach(result => {
             dynamicContent[result.contentKey] = result.content;
+            console.log(`Storing content for ${result.contentKey}: ${result.content.length} characters`);
+            console.log(`Content preview: ${result.content.substring(0, 200)}...`);
+            console.log(`Content ends with: ...${result.content.slice(-200)}`);
           });
           
           // Save AI response to database
           const aiResponseString = JSON.stringify(dynamicContent);
           console.log('Saving dynamic content to database:', Object.keys(dynamicContent));
+          console.log('Total JSON string length:', aiResponseString.length);
           db.run('UPDATE user_sessions SET ai_response = ? WHERE user_id = ?', [aiResponseString, user_id], function(err) {
             if (err) {
               console.error('Error saving AI response:', err);

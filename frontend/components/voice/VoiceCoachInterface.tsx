@@ -6,7 +6,7 @@ import { Button } from '../ui/Button';
 import { useOpenAIRealtime } from '../../lib/useOpenAIRealtime';
 import { AvatarLoop, AvatarLoopRef } from './AvatarLoop';
 import { VoicePreferences, VoicePreferences as VoicePreferencesType } from './VoicePreferences';
-import { voiceApi } from '../../lib/api';
+import { voiceApi, userApi } from '../../lib/api';
 import { VoiceCard, VoiceProfile } from '../../types';
 import AudioManager from '../../lib/useAudioManager';
 import { BoldTextRenderer } from './BoldTextRenderer';
@@ -48,6 +48,88 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
   const isSubmittingTextRef = useRef(false);
   const textRevealCompleteRef = useRef<boolean>(false);
   const lastFullTextRef = useRef<string>('');
+
+  // Topic filtering state
+  const [topicKeywords, setTopicKeywords] = useState<string[]>([]);
+  const [primaryCondition, setPrimaryCondition] = useState<string>('');
+
+  // Load user session to build topic keywords (condition, goals, interests)
+  useEffect(() => {
+    const loadUserTopicContext = async () => {
+      try {
+        const session = await userApi.getSession(userId);
+        const condition = (session?.condition_selected || '').toString().toLowerCase();
+        setPrimaryCondition(condition);
+
+        const toArray = (v: any): string[] => Array.isArray(v)
+          ? v
+          : (typeof v === 'string' && v.length > 0 ? v.split(',') : []);
+
+        const healthGoals = toArray(session?.health_goals).map((s: string) => s.toLowerCase());
+        const mainGoals = toArray(session?.main_goal).map((s: string) => s.toLowerCase());
+        const mainInterests = toArray(session?.main_interests).map((s: string) => s.toLowerCase());
+        const meds = toArray(session?.medications).map((s: string) => s.toLowerCase());
+
+        const base: string[] = [];
+        if (condition) base.push(condition);
+        base.push(
+          ...healthGoals,
+          ...mainGoals,
+          ...mainInterests,
+          ...meds
+        );
+
+        if (condition.includes('asthma') || condition.includes('respiratory') || condition.includes('copd')) {
+          base.push('inhaler', 'breathing', 'wheezing', 'rescue inhaler', 'spacer');
+        }
+        if (condition.includes('diabetes') || meds.some(m => m.includes('insulin'))) {
+          base.push('blood sugar', 'glucose', 'insulin', 'carbs', 'a1c');
+        }
+        if (condition.includes('heart') || condition.includes('blood pressure')) {
+          base.push('bp', 'hypertension', 'cholesterol', 'statin', 'pulse');
+        }
+
+        const unique = Array.from(new Set(base.filter(Boolean).map(s => s.trim()).filter(s => s.length > 1)));
+        setTopicKeywords(unique);
+      } catch (e) {
+        console.warn('Failed to load user session for topic filtering');
+      }
+    };
+    loadUserTopicContext();
+  }, [userId]);
+
+  // Small talk detection (allowed even if unrelated)
+  const isSmallTalk = (text: string): boolean => {
+    const t = text.toLowerCase().trim();
+    const patterns = [
+      'how are you', 'how about you', "how's it going", 'what about you', 'and you',
+      'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'good night',
+      'thank you', 'thanks', 'ok', 'okay', 'great', 'nice', 'cool', 'sounds good'
+    ];
+    return patterns.some(p => t.includes(p));
+  };
+
+  // Meta-conversation questions (allowed)
+  const isMetaConversation = (text: string): boolean => {
+    const t = text.toLowerCase().trim();
+    const patterns = [
+      'what can you help', 'what can you do', 'how can you help', 'how can you assist', 'can you help', 'help me', 'assist me',
+      'how do you work', 'how does this work', 'what can i ask', 'what should i ask', 'what do you know',
+      'tell me about yourself', 'what are you', 'who are you', 'what is this'
+    ];
+    if (patterns.some(p => t.includes(p))) return true;
+    // Short generic help questions
+    const wordCount = t.split(/\s+/).filter(Boolean).length;
+    if (wordCount <= 6 && (t.includes('help') || t.endsWith('?'))) return true;
+    return false;
+  };
+
+  // Relevance check against topic keywords
+  const isRelatedToTopic = (text: string): boolean => {
+    const t = text.toLowerCase();
+    if (primaryCondition && t.includes(primaryCondition)) return true;
+    return topicKeywords.some(k => k && t.includes(k));
+  };
   const chatWindowRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef<{ active: boolean; offsetX: number; offsetY: number }>({ active: false, offsetX: 0, offsetY: 0 });
 
@@ -284,6 +366,20 @@ export const VoiceCoachInterface: React.FC<VoiceCoachInterfaceProps> = ({ userId
     const userMsg: ChatMsg = { id: `u_${Date.now()}_${Math.random().toString(36).slice(2)}`, role: 'user', text, createdAt: Date.now(), isTextInput: true };
     setMessages(prev => [...prev, userMsg]);
     activeUserIdRef.current = userMsg.id;
+
+    // TOPIC GATING for text input: allow small talk, otherwise require relation to topic
+    const allow = topicKeywords.length === 0 || isSmallTalk(text) || isMetaConversation(text) || isRelatedToTopic(text);
+    if (!allow) {
+      const redirectText = primaryCondition
+        ? `I'm here to help with your health questions and education. Is there anything about your ${primaryCondition} or health goals I can help you with today?`
+        : `I'm here to help with your health questions and education. Is there anything about your condition or health goals I can help you with today?`;
+      const asstIdRedirect = `a_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const assistantRedirect: ChatMsg = { id: asstIdRedirect, role: 'assistant', text: redirectText, status: 'finished', createdAt: Date.now() } as ChatMsg;
+      setMessages(prev => [...prev, assistantRedirect]);
+      setTextInput('');
+      setTimeout(() => { isSubmittingTextRef.current = false; }, 50);
+      return;
+    }
 
     // Create assistant placeholder
     const asstId = `a_${Date.now()}_${Math.random().toString(36).slice(2)}`;

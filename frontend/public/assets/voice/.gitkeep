@@ -1,0 +1,18 @@
+# Voice Agent Assets
+
+Place your voice agent head image here as: **agent-head.png**
+
+## Image Requirements:
+- Format: PNG (with transparent background recommended)
+- Size: Square format (256x256, 512x512, or 1024x1024 pixels)
+- Content: Voice agent head/face/avatar
+- File name: **agent-head.png** (exact name)
+
+## Usage:
+The image will be displayed in:
+- Floating Action Button (FAB): 64x64 pixels
+- Popup header: 40x40 pixels
+
+## Fallback:
+If the image is not found, the system automatically uses the animated avatar loop video.
+

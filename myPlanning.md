@@ -661,7 +661,45 @@ backend/
 8. ✅ **Interest-Based Filtering**: Cards align with what user expressed interest in
 9. ✅ **Fallback System**: Default cards if generation fails or no preferences specified
 
-## Current Tasks - October 4, 2025
+## Current Tasks - October 5, 2025
+
+### Task: Dashboard Voice Agent Pop-up Implementation
+**Objective**: Create a floating action button (FAB) with pop-up voice agent for the Dashboard page, completely separate from the main Voice Coach page.
+
+#### Requirements:
+1. ✅ User-provided head logo as FAB icon (place image at `frontend/public/assets/voice/agent-head.png`)
+2. ✅ Separate voice agent implementation (doesn't affect main Voice Coach page)
+3. ✅ Quick suggestion chips functional (prefill input on click)
+4. ✅ Scrollable chat transcript with smooth scrolling
+5. ✅ Draggable and resizable popup window
+6. ✅ Mic button with icon for push-to-talk
+7. ✅ Fancy, modern UI design
+8. ✅ Voice reading functionality (hear AI responses)
+9. ⏳ Fix dashboard card content generation issue
+10. ✅ Topic filtering (dashboard-only questions)
+
+#### Implementation Status:
+- ✅ Created `DashboardVoiceAgent.tsx` - Clean, separate component
+- ✅ FAB with animated avatar head (20x20, ring colors for activity states)
+- ✅ Pop-up window (600x600, rounded corners, modern shadow)
+- ✅ Quick suggestion chips (4 dashboard-related questions)
+- ✅ Scrollable chat area with user/assistant messages
+- ✅ Text input + Send button + Mic button (push-to-talk)
+- ✅ Status bar showing agent state
+- ✅ Topic filtering (dashboard cards + small talk + meta questions)
+- ✅ Voice reading via OpenAI Realtime API
+- ✅ Completely isolated from main Voice Coach page
+
+#### Next Steps:
+1. Add user's head logo image to `frontend/public/assets/voice/agent-head.png`
+2. Test voice agent functionality (text + voice)
+3. Debug card content generation issue (if related to voice agent changes)
+4. Fine-tune popup size/positioning if needed
+5. Add drag/resize functionality if user requests it
+
+---
+
+## Previous Tasks - October 4, 2025
 
 ### Task: Make Step 2 Condition Selection Required with Validation
 **Objective**: Add proper validation to Step 2 so users see an error message if they try to continue without selecting a condition, matching the validation pattern used in Steps 1, 3, and 4.

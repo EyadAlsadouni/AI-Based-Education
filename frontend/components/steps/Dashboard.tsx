@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import AudioManager from '../../lib/useAudioManager';
+import { DashboardVoiceAgent } from '../voice/DashboardVoiceAgent';
 
 // Helper function to format time in MM:SS format
 const formatTime = (seconds: number): string => {
@@ -159,8 +160,9 @@ const ContentModal: React.FC<ContentModalProps> = ({
         {/* Modal Content */}
         <div className="flex-1 p-6 overflow-y-auto min-h-0" style={{ maxHeight: 'calc(90vh - 200px)' }}>
           <div className="prose prose-gray max-w-none pb-8">
-            {console.log('ContentModal - Content length:', content.length, 'Content preview:', content.substring(0, 200) + '...')}
-            {content.split('\n').map((paragraph, index) => {
+            {(() => {
+              console.log('ContentModal - Content length:', content.length, 'Content preview:', content.substring(0, 200) + '...');
+              return content.split('\n').map((paragraph, index) => {
               if (paragraph.trim() === '') return null;
               
               // Check if this is the References section
@@ -293,7 +295,8 @@ const ContentModal: React.FC<ContentModalProps> = ({
                   })}
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
         </div>
 
@@ -338,7 +341,7 @@ export const DashboardComponent: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [dashboardAudioManager] = useState(() => new AudioManager());
+  const [dashboardAudioManager] = useState(() => AudioManager.getInstance());
   
   // Audio progress and highlighting states
   const [audioDuration, setAudioDuration] = useState(0);
@@ -477,30 +480,30 @@ export const DashboardComponent: React.FC = () => {
         setUserSession(session);
 
         // Generate dynamic cards based on user session
-        let generatedCards = [];
+        let generatedCards: DashboardCard[] = [];
         if (session) {
           try {
             // Ensure arrays are properly parsed
-            const healthGoals = Array.isArray(session.health_goals) ? session.health_goals : (session.health_goals ? session.health_goals.split(',') : []);
-            const mainInterests = Array.isArray(session.main_interests) ? session.main_interests : (session.main_interests ? session.main_interests.split(',') : []);
-            const mainGoals = Array.isArray(session.main_goal) ? session.main_goal : (session.main_goal ? session.main_goal.split(',') : []);
+            const healthGoals = Array.isArray(session.health_goals) ? session.health_goals : (session.health_goals ? (session.health_goals as string).split(',') : []);
+            const mainInterests = Array.isArray((session as any).main_interests) ? (session as any).main_interests : ((session as any).main_interests ? ((session as any).main_interests as string).split(',') : []);
+            const mainGoals = Array.isArray(session.main_goal) ? session.main_goal : (session.main_goal ? (session.main_goal as string).split(',') : []);
             
             console.log('Dashboard - Parsed data:', {
               condition: session.condition_selected,
               healthGoals,
               mainInterests,
               mainGoals,
-              knowledgeLevel: session.knowledge_level,
-              learningStyle: session.learning_style
+              knowledgeLevel: (session as any).knowledge_level,
+              learningStyle: (session as any).learning_style
             });
             
             generatedCards = generateDashboardCards(
               session.condition_selected,
               healthGoals,
-              session.knowledge_level || 'new',
+              (session as any).knowledge_level || 'new',
               mainInterests,
               mainGoals,
-              session.learning_style
+              (session as any).learning_style
             );
             console.log('Dashboard - Generated cards:', generatedCards.length);
             setDynamicCards(generatedCards);
@@ -707,7 +710,7 @@ export const DashboardComponent: React.FC = () => {
         pdf.setFont('helvetica', 'normal');
         
         // Clean and split content into lines
-        const cleanContent = card.content
+        const cleanContent = (card.content || '')
           .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** formatting for cleaner text
           .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters that might cause issues
           .trim();
@@ -721,7 +724,7 @@ export const DashboardComponent: React.FC = () => {
           }
           
           // Handle bold sections by looking for the original ** markers in content
-          if (card.content.includes('**') && line.length > 0) {
+          if (card.content && card.content.includes('**') && line.length > 0) {
             // Simple approach: if the line corresponds to a bold section, make it bold
             const originalParts = card.content.split(/\*\*(.*?)\*\*/g);
             let isBoldSection = false;
@@ -827,32 +830,25 @@ export const DashboardComponent: React.FC = () => {
             <div className="p-6">
               {dashboardContent && dynamicCards.length > 0 ? (
                 <div className="space-y-6">
-                  {dynamicCards.map((card) => {
+                  {dynamicCards.map((card: DashboardCard) => {
                     let content = '';
+                    
+                    console.log(`Processing card: ${card.title}, ID: ${card.id}, ContentKey: ${card.contentKey}`);
+                    console.log(`Dashboard content keys available:`, Object.keys(dashboardContent || {}));
                     
                     // For dynamic cards, use the contentKey to get content
                     if ('contentKey' in card) {
                       content = (dashboardContent as any)[card.contentKey] || '';
                       console.log(`Card ${card.title} (${card.contentKey}):`, content ? `Has content (${content.length} chars)` : 'No content');
                       if (!content) {
-                        console.log('Available content keys:', Object.keys(dashboardContent || {}));
+                        console.log(`ERROR: No content found for key '${card.contentKey}' in dashboard content`);
+                        console.log('All available keys:', Object.keys(dashboardContent || {}));
+                        console.log('Full dashboard content:', dashboardContent);
                       }
                     } else {
-                      // Legacy card handling
-                      switch (card.id) {
-                        case 'diagnosis':
-                          content = dashboardContent.diagnosis_basics;
-                          break;
-                        case 'nutrition':
-                          content = dashboardContent.nutrition_carbs;
-                          break;
-                        case 'workout':
-                          content = dashboardContent.workout;
-                          break;
-                        case 'daily_plan':
-                          content = dashboardContent.daily_plan;
-                          break;
-                      }
+                      // Legacy card handling (should not happen with dynamic cards)
+                      console.log(`Warning: Card ${card.title} has no contentKey property`);
+                      content = '';
                     }
 
                     const isCurrentlyPlaying = playingCardId === card.id;
@@ -1188,10 +1184,10 @@ export const DashboardComponent: React.FC = () => {
         content={selectedCard?.content || ''}
         icon={selectedCard?.icon || ''}
         highlightedText={highlightedText}
-        isHighlighting={isHighlighting && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
-        isPlaying={isPlaying && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
-        isPaused={isPaused && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
-        isGenerating={isGenerating && selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
+        isHighlighting={isHighlighting && !!selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
+        isPlaying={isPlaying && !!selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
+        isPaused={isPaused && !!selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
+        isGenerating={isGenerating && !!selectedCard && playingCardId === dynamicCards.find(c => c.title === selectedCard.title)?.id}
         audioDuration={audioDuration}
         audioCurrentTime={audioCurrentTime}
         onPlayPause={() => {
@@ -1209,6 +1205,13 @@ export const DashboardComponent: React.FC = () => {
           setIsPaused(false);
           setPlayingCardId(null);
         }}
+      />
+
+      {/* Dashboard Voice Agent */}
+      <DashboardVoiceAgent 
+        userId={userSession?.user_id || userSession?.id || 1}
+        dashboardCards={dynamicCards}
+        userSession={userSession}
       />
     </div>
   );

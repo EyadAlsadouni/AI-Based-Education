@@ -347,7 +347,7 @@ router.post('/generate-dashboard', async (req, res) => {
             
             try {
             const response = await openai.chat.completions.create({
-                model: 'gpt-4',
+                model: 'gpt-4o',  // Changed from gpt-4 to gpt-4o for 12x cost savings
                 messages: [
                   { role: 'system', content: systemPrompt },
                   { role: 'user', content: cardPrompt }
@@ -370,7 +370,7 @@ router.post('/generate-dashboard', async (req, res) => {
                 try {
                   // Make a second API call to complete the response
                   const completionResponse = await openai.chat.completions.create({
-                    model: 'gpt-4',
+                    model: 'gpt-4o',  // Changed from gpt-4 to gpt-4o for cost savings
                     messages: [
                       { role: 'system', content: systemPrompt },
                       { role: 'user', content: cardPrompt },
@@ -558,7 +558,7 @@ router.post('/generate-dashboard', async (req, res) => {
             }
             
             const response = await openai.chat.completions.create({
-              model: 'gpt-4',
+              model: 'gpt-4o',  // Changed from gpt-4 to gpt-4o for 12x cost savings
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: prompt }

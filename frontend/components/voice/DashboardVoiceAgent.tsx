@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, Mic, Send, Square, Pause, Play } from 'lucide-react';
-import { Rnd } from 'react-rnd';
 import { voiceApi } from '../../lib/api';
 import { useOpenAIRealtime } from '../../lib/useOpenAIRealtime';
 import { AvatarLoop } from './AvatarLoop';
@@ -30,6 +29,16 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
   const [sessionId, setSessionId] = useState<string>('');
   const [hasShownGreeting, setHasShownGreeting] = useState(false);
   
+  // Dragging and resizing state
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [size, setSize] = useState({ width: 600, height: 640 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeDirection, setResizeDirection] = useState<string>('');
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0, posX: 0, posY: 0 });
+  const popupRef = useRef<HTMLDivElement>(null);
+
   const realtimeSession = useOpenAIRealtime();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const submittingRef = useRef(false);
@@ -192,6 +201,102 @@ Be helpful, accurate, and conversational!`;
       initSession();
     }
   }, [isOpen, isInitialized, userId, realtimeSession, dashboardCards, userSession]);
+
+  // Set initial position when popup opens
+  useEffect(() => {
+    if (isOpen && position.x === 0 && position.y === 0) {
+      const x = window.innerWidth - 624;
+      const y = window.innerHeight - 664;
+      setPosition({ x, y });
+    }
+  }, [isOpen, position]);
+
+  // Handle dragging
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.drag-handle')) {
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX - position.x,
+        y: e.clientY - position.y
+      });
+    }
+  }, [position]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (isDragging) {
+      setPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+    if (isResizing) {
+      const deltaX = e.clientX - resizeStart.x;
+      const deltaY = e.clientY - resizeStart.y;
+      
+      let newWidth = resizeStart.width;
+      let newHeight = resizeStart.height;
+      let newX = resizeStart.posX;
+      let newY = resizeStart.posY;
+
+      // Handle horizontal resizing
+      if (resizeDirection.includes('e')) {
+        newWidth = Math.max(400, Math.min(1200, resizeStart.width + deltaX));
+      } else if (resizeDirection.includes('w')) {
+        const widthChange = Math.max(400, Math.min(1200, resizeStart.width - deltaX));
+        if (widthChange !== resizeStart.width) {
+          newWidth = widthChange;
+          newX = resizeStart.posX + (resizeStart.width - widthChange);
+        }
+      }
+
+      // Handle vertical resizing
+      if (resizeDirection.includes('s')) {
+        newHeight = Math.max(500, Math.min(900, resizeStart.height + deltaY));
+      } else if (resizeDirection.includes('n')) {
+        const heightChange = Math.max(500, Math.min(900, resizeStart.height - deltaY));
+        if (heightChange !== resizeStart.height) {
+          newHeight = heightChange;
+          newY = resizeStart.posY + (resizeStart.height - heightChange);
+        }
+      }
+
+      setSize({ width: newWidth, height: newHeight });
+      setPosition({ x: newX, y: newY });
+    }
+  }, [isDragging, isResizing, dragStart, resizeStart, resizeDirection]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    setIsResizing(false);
+  }, []);
+
+  // Handle resize from any direction
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent, direction: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeDirection(direction);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: size.width,
+      height: size.height,
+      posX: position.x,
+      posY: position.y
+    });
+  }, [size, position]);
+
+  useEffect(() => {
+    if (isDragging || isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
   // Auto-scroll to latest message - only when NOT actively scrolling
   useEffect(() => {
@@ -532,35 +637,21 @@ Be helpful, accurate, and conversational!`;
         </div>
       )}
 
-      {/* Popup Window - Resizable & Draggable */}
+      {/* Popup Window - Custom Draggable & Resizable */}
       {isOpen && (
-        <Rnd
-          default={{
-            x: window.innerWidth - 624, // 24px from right (right-6 = 24px)
-            y: window.innerHeight - 664, // 24px from bottom (bottom-6 = 24px) 
-            width: 600,
-            height: 640
+        <div
+          ref={popupRef}
+          className="fixed z-50"
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            width: `${size.width}px`,
+            height: `${size.height}px`,
+            cursor: isDragging ? 'grabbing' : 'default'
           }}
-          minWidth={400}
-          minHeight={500}
-          maxWidth={900}
-          maxHeight={800}
-          bounds="window"
-          dragHandleClassName="drag-handle"
-          className="z-50"
-          style={{ position: 'fixed' }}
-          enableResizing={{
-            top: true,
-            right: true,
-            bottom: true,
-            left: true,
-            topRight: true,
-            bottomRight: true,
-            bottomLeft: true,
-            topLeft: true
-          }}
+          onMouseDown={handleMouseDown}
         >
-          <div className="w-full h-full bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
+          <div className="w-full h-full bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden relative">
             {/* Header - Draggable */}
             <div className="drag-handle cursor-move flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-purple-50">
             <div className="flex items-center gap-3">
@@ -718,8 +809,29 @@ Be helpful, accurate, and conversational!`;
               </button>
             </div>
           </form>
+          
+          {/* Resize Handles - 8 directions */}
+          {/* Corners */}
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 'nw')} className="absolute top-0 left-0 w-3 h-3 cursor-nw-resize" />
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 'ne')} className="absolute top-0 right-0 w-3 h-3 cursor-ne-resize" />
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 'sw')} className="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize" />
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 'se')} className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize" />
+          
+          {/* Edges */}
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 'n')} className="absolute top-0 left-3 right-3 h-1 cursor-n-resize" />
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 's')} className="absolute bottom-0 left-3 right-3 h-1 cursor-s-resize" />
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 'w')} className="absolute left-0 top-3 bottom-3 w-1 cursor-w-resize" />
+          <div onMouseDown={(e) => handleResizeMouseDown(e, 'e')} className="absolute right-0 top-3 bottom-3 w-1 cursor-e-resize" />
+          
+          {/* Visual indicator for bottom-right corner */}
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 pointer-events-none"
+            style={{
+              background: 'linear-gradient(135deg, transparent 50%, #cbd5e1 50%)'
+            }}
+          />
           </div>
-        </Rnd>
+        </div>
       )}
     </>
   );

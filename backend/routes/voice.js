@@ -541,16 +541,99 @@ router.ws = function(app) {
       }
     });
     
-    // Pipe client -> upstream (ChatGPT's exact pattern)
-    client.on('message', (data, isBinary) => {
+    // Pipe client -> upstream with CONTEXT INJECTION
+    client.on('message', async (data, isBinary) => {
       if (upstream.readyState === WebSocket.OPEN) {
+        try {
+          const message = JSON.parse(data.toString());
+          console.log('[WebSocket Proxy] Client -> OpenAI:', message.type);
+          
+          // Log function definitions being sent
+          if (message.type === 'session.update' && message.session?.tools) {
+            console.log('[WebSocket Proxy] Tools sent to OpenAI:', message.session.tools.map(t => t.name));
+          }
+          
+          // 🎯 CONTEXT INJECTION: Automatically inject dashboard data before user messages
+          if (message.type === 'conversation.item.create' && 
+              message.item?.type === 'message' && 
+              message.item?.role === 'user') {
+            
+            console.log('[Context Injection] User message detected, injecting dashboard context...');
+            
+            try {
+              // Fetch complete dashboard context from database
+              const context = await realtimeService.getUserContext(userId, 'dashboard context');
+              
+              // Build a clear, explicit context message with all dashboard data
+              const cardsText = context.dashboard_cards.length > 0 
+                ? context.dashboard_cards.map((card, i) => {
+                    // Include first 300 chars of content as preview
+                    const contentPreview = card.content && card.content !== '(Content not yet generated)' 
+                      ? card.content.substring(0, 300).replace(/\n/g, ' ') + '...'
+                      : 'Content available on request';
+                    return `   ${i + 1}. **${card.title}** - ${card.description}\n      Preview: ${contentPreview}`;
+                  }).join('\n\n')
+                : '   (No cards found)';
+              
+              const contextText = `[SYSTEM CONTEXT - This is the user's dashboard data. Use it to answer their question.]
+
+USER PROFILE:
+- Name: ${context.user_profile.full_name || 'Patient'}
+- Health Condition: ${context.user_profile.condition_selected || 'Not specified'}
+- Primary Health Goal: ${context.user_profile.main_goal || 'Not specified'}
+- Current Medications: ${context.user_profile.medications?.join(', ') || 'None listed'}
+
+DASHBOARD CARDS (Total: ${context.dashboard_cards.length}):
+${cardsText}
+
+PAGE FEATURES & ACTIONS AVAILABLE:
+- ${context.page_features.features.join('\n- ')}
+
+IMPORTANT INSTRUCTIONS:
+1. You HAVE ACCESS to the user's health profile and card information above
+2. When asked about their health goal, use the "Primary Health Goal" from USER PROFILE
+3. When asked about card content, use the Preview information provided
+4. For detailed content, tell them to click the card or use the play button
+5. Always use **bold** formatting for card titles and section headers
+6. Be conversational and answer follow-up questions naturally
+
+Now answer the user's question using this data.`;
+              
+              // Create a system-level context message
+              const contextMessage = {
+                type: 'conversation.item.create',
+                item: {
+                  type: 'message',
+                  role: 'system',
+                  content: [{
+                    type: 'input_text',
+                    text: contextText
+                  }]
+                }
+              };
+              
+              // Send context BEFORE user message
+              upstream.send(JSON.stringify(contextMessage));
+              console.log('[Context Injection] ✅ Dashboard context injected successfully');
+              console.log(`[Context Injection] Sent ${context.dashboard_cards.length} cards:`, 
+                context.dashboard_cards.map(c => c.title).join(', ') || 'None');
+              
+            } catch (error) {
+              console.error('[Context Injection] ❌ Error injecting context:', error);
+            }
+          }
+          
+        } catch (e) {
+          // Binary data, forward as-is
+        }
         upstream.send(data, { binary: isBinary });
       }
     });
     
-    // Pipe upstream -> client (ChatGPT's exact pattern)
-    upstream.on('message', (data, isBinary) => {
+    // Pipe upstream -> client (simple forwarding, no function interception needed with context injection)
+    upstream.on('message', async (data, isBinary) => {
       if (client.readyState === WebSocket.OPEN) {
+        // Forward all messages from OpenAI to client
         client.send(data, { binary: isBinary });
       }
     });
@@ -618,23 +701,7 @@ router.post('/webrtc/sdp', async (req, res) => {
           CRITICAL: Always respond in English only. Never use any other language.
           If the user speaks in another language, acknowledge it but respond in English.`,
         voice: 'alloy',
-        tools: config?.tools || [
-          {
-            type: 'function',
-            name: 'get_user_context',
-            description: 'Get user dashboard, profile, and knowledge base context for grounded responses',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The user query to search context for'
-                }
-              },
-              required: ['query']
-            }
-          }
-        ]
+        tools: config?.tools || []
       }
     });
 

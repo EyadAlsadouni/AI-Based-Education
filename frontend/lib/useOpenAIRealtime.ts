@@ -13,7 +13,7 @@ export interface RealtimeSession {
   lastResponse: string; // full text from model
   visibleResponse: string; // text revealed to UI in sync with audio
   error: string | null;
-  connect: (userId: number, sessionId: string) => Promise<void>;
+  connect: (userId: number, sessionId: string, skipDefaultInstructions?: boolean) => Promise<void>;
   disconnect: () => void;
   startListening: () => void;
   stopListening: () => void;
@@ -23,6 +23,7 @@ export interface RealtimeSession {
   pauseOutput: () => void;
   resumeOutput: () => void;
   clearBuffers: () => void;
+  sendSessionUpdate: (sessionConfig: any) => boolean;
 }
 
 interface RealtimeMessage {
@@ -89,7 +90,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   }, []);
 
   // Connect to OpenAI Realtime API via our backend
-  const connect = useCallback(async (userId: number, sessionId: string) => {
+  const connect = useCallback(async (userId: number, sessionId: string, skipDefaultInstructions?: boolean) => {
     try {
       setError(null);
       
@@ -137,6 +138,11 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         
         // Wait a bit before sending session configuration
         setTimeout(() => {
+          if (skipDefaultInstructions) {
+            console.log('Skipping default instructions - caller will provide custom instructions');
+            return;
+          }
+          
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             console.log('Sending session configuration...');
             // Send session update to configure the session
@@ -1002,6 +1008,18 @@ LANGUAGE:
     setError(null);
   }, []);
 
+  // Send custom session update
+  const sendSessionUpdate = useCallback((sessionConfig: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'session.update',
+        session: sessionConfig
+      }));
+      return true;
+    }
+    return false;
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1029,6 +1047,7 @@ LANGUAGE:
     clearError,
     pauseOutput,
     resumeOutput,
-    clearBuffers
+    clearBuffers,
+    sendSessionUpdate
   };
 };

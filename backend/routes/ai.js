@@ -423,11 +423,36 @@ router.post('/generate-dashboard', async (req, res) => {
           const aiResponseString = JSON.stringify(dynamicContent);
           console.log('Saving dynamic content to database:', Object.keys(dynamicContent));
           console.log('Total JSON string length:', aiResponseString.length);
+          
+          // ALSO save the card metadata to dashboard_content table (needed for voice agent context)
+          const cardsMetadata = dynamic_cards.map(card => ({
+            id: card.id,
+            title: card.title,
+            description: card.description,
+            icon: card.icon,
+            contentKey: card.contentKey
+          }));
+          const cardsMetadataString = JSON.stringify(cardsMetadata);
+          
           db.run('UPDATE user_sessions SET ai_response = ? WHERE user_id = ?', [aiResponseString, user_id], function(err) {
             if (err) {
               console.error('Error saving AI response:', err);
             } else {
-              console.log('Successfully saved dynamic content to database');
+              console.log('Successfully saved dynamic content to user_sessions');
+              
+              // Save card metadata to dashboard_content table
+              db.run(`
+                INSERT OR REPLACE INTO dashboard_content (user_id, cards_data, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+              `, [user_id, cardsMetadataString], function(metaErr) {
+                if (metaErr) {
+                  console.error('Error saving dashboard_content metadata:', metaErr);
+                } else {
+                  console.log('Successfully saved card metadata to dashboard_content');
+                  console.log('Saved card titles:', cardsMetadata.map(c => c.title).join(', '));
+                }
+              });
+              
               // Verify the content was saved correctly
               db.get('SELECT ai_response FROM user_sessions WHERE user_id = ?', [user_id], (verifyErr, verifyRow) => {
                 if (verifyErr) {

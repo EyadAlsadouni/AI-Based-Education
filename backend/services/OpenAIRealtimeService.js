@@ -37,9 +37,30 @@ class OpenAIRealtimeService {
       // This will be called by the OpenAI Realtime model via function calling
       const context = await this.fetchUserContext(userId, query);
       
+      console.log(`[getUserContext] Returning context with ${context.dashboard_cards?.length || 0} cards`);
+      if (context.dashboard_cards && context.dashboard_cards.length > 0) {
+        console.log('[getUserContext] Card titles:', context.dashboard_cards.map(c => c.title).join(', '));
+      }
+      
       return {
-        dashboard_cards: context.dashboard || [],
+        dashboard_cards: context.dashboard_cards || [],
         user_profile: context.profile || {},
+        page_features: {
+          buttons: [
+            { name: 'Download Report', action: 'Downloads PDF with all educational content' },
+            { name: 'Start Over', action: 'Clears data and starts new health assessment' },
+            { name: 'Talk to Voice Coach', action: 'Opens full voice assistant for interactive learning' },
+            { name: 'Play button (on cards)', action: 'Reads card content aloud using text-to-speech' }
+          ],
+          features: [
+            'Click cards to view full educational content',
+            'Use play button on cards to hear audio summaries',
+            'Download complete PDF report',
+            'Start over to create new assessment',
+            'Access full Voice Coach for in-depth questions'
+          ],
+          page_name: 'Health Dashboard'
+        },
         knowledge_base: context.kb_results || [],
         emergency_detected: this.detectEmergencyIntent(query)
       };
@@ -48,6 +69,7 @@ class OpenAIRealtimeService {
       return {
         dashboard_cards: [],
         user_profile: {},
+        page_features: {},
         knowledge_base: [],
         emergency_detected: false,
         error: 'Failed to retrieve context'
@@ -60,12 +82,13 @@ class OpenAIRealtimeService {
     const db = require('../server').db;
     
     return new Promise((resolve, reject) => {
-      // Get user profile and dashboard
+      // Get user profile and dashboard CONTENT (not just cards_data)
       const profileQuery = `
         SELECT 
           u.full_name, u.gender, u.age, u.health_goals,
           us.condition_selected, us.diagnosis_year, us.takes_medication, 
           us.medications, us.checks_vitals, us.main_goal, us.main_question,
+          us.ai_response,
           dc.cards_data
         FROM users u
         LEFT JOIN user_sessions us ON u.id = us.user_id
@@ -93,14 +116,43 @@ class OpenAIRealtimeService {
           main_question: row.main_question
         } : {};
 
-        const dashboard = row && row.cards_data ? JSON.parse(row.cards_data) : [];
+        // Get BOTH card metadata AND full card content
+        let cardsMetadata = [];
+        let dashboardContent = {};
+        
+        try {
+          // cards_data has card titles/descriptions
+          if (row && row.cards_data) {
+            cardsMetadata = JSON.parse(row.cards_data);
+          }
+          
+          // ai_response has the ACTUAL card content
+          if (row && row.ai_response) {
+            dashboardContent = JSON.parse(row.ai_response);
+          }
+        } catch (parseErr) {
+          console.error('Error parsing dashboard data:', parseErr);
+        }
+
+        // Combine cards metadata with their content
+        const dashboardWithContent = cardsMetadata.map(card => ({
+          id: card.id,
+          title: card.title,
+          description: card.description,
+          icon: card.icon,
+          content: dashboardContent[card.contentKey || card.id] || '(Content not yet generated)',
+          contentKey: card.contentKey || card.id
+        }));
+
+        console.log(`[get_user_context] Found ${dashboardWithContent.length} cards with content for user ${userId}`);
 
         // Simple KB search (in production, use vector similarity)
         const kbResults = this.searchKnowledgeBase(query);
 
         resolve({
           profile,
-          dashboard,
+          dashboard_cards: dashboardWithContent,
+          dashboard_content: dashboardContent,
           kb_results: kbResults
         });
       });

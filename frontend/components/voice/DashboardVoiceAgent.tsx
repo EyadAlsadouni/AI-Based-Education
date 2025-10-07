@@ -5,6 +5,7 @@ import { X, Mic, Send, Square, Pause, Play } from 'lucide-react';
 import { voiceApi } from '../../lib/api';
 import { useOpenAIRealtime } from '../../lib/useOpenAIRealtime';
 import { AvatarLoop } from './AvatarLoop';
+import { BoldTextRenderer } from './BoldTextRenderer';
 
 interface DashboardVoiceAgentProps {
   userId: number;
@@ -110,8 +111,68 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
           const session = await voiceApi.createSession(userId);
           setSessionId(session.session_id);
           
-          // Connect to realtime session
-          await realtimeSession.connect(userId, session.session_id);
+          // Connect to realtime session - skip default instructions
+          await realtimeSession.connect(userId, session.session_id, true);
+          
+          // Send dashboard-specific session configuration immediately after connection
+          setTimeout(() => {
+            if (realtimeSession.isConnected) {
+              console.log('[Dashboard Agent] Sending dashboard-specific instructions...');
+              
+              // Create dashboard-specific instructions (simplified - context is auto-injected by backend)
+              const dashboardInstructions = `You are ${userSession?.full_name || 'the user'}'s friendly Dashboard Assistant, here to help them navigate their personalized health dashboard.
+
+CONTEXT AWARENESS:
+Before every user question, you automatically receive their complete dashboard data including:
+- User profile (name, condition, health goals, medications)
+- All dashboard cards with titles, descriptions, and content previews
+- Available page features and actions
+
+HOW TO RESPOND:
+1. Answer questions directly using the context data provided
+2. When asked about health goals → Use the "Primary Health Goal" from their profile
+3. When asked about card content → Provide a summary from the preview, then suggest clicking the card for full details
+4. Be conversational and natural - handle follow-up questions smoothly
+5. Use **bold** formatting for card titles and important terms (the UI will render these as bold)
+6. If greeted, respond warmly ONCE, then focus on their actual question
+
+RESPONSE STYLE:
+- Warm, supportive, and encouraging (like a helpful health coach)
+- Conversational and natural (not robotic)
+- Clear and simple (easy to understand)
+- Avoid repeating greetings - get to their question quickly
+- Always in English
+
+EXAMPLE CONVERSATIONS:
+- "What's my health goal?" → "Your primary health goal is [goal from profile]. Would you like tips on achieving it?"
+- "Summarize the Heart Health card" → "**Heart Health Basics** covers [preview content]. Click the card to read the full content or use the play button to hear an audio summary!"
+- "What can I do here?" → "You can: view your 2 educational cards, click cards for full content, download a PDF report, or ask me about your health information!"
+
+Be helpful, accurate, and conversational!`;
+
+              // Send session update with dashboard-specific instructions
+              // Note: No tools/functions needed - context is auto-injected by backend
+              const sessionConfig = {
+                modalities: ['text', 'audio'],
+                instructions: dashboardInstructions,
+                voice: 'alloy',
+                input_audio_format: 'pcm16',
+                output_audio_format: 'pcm16',
+                input_audio_transcription: {
+                  model: 'whisper-1'
+                }
+              };
+              
+              console.log('[Dashboard Agent] Sending session config:', sessionConfig);
+              const success = realtimeSession.sendSessionUpdate(sessionConfig);
+              
+              if (success) {
+                console.log('[Dashboard Agent] Dashboard-specific instructions sent successfully');
+              } else {
+                console.warn('[Dashboard Agent] Failed to send dashboard-specific instructions');
+              }
+            }
+          }, 100); // Wait for connection to be fully established (minimal delay)
           
           setIsInitialized(true);
         } catch (error) {
@@ -155,6 +216,23 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
       
       return m;
     }));
+    
+    // Timeout handler: If stuck in "processing" for too long, show error
+    if (realtimeSession.isProcessing) {
+      const timeout = setTimeout(() => {
+        if (activeAssistantIdRef.current === id && realtimeSession.isProcessing) {
+          console.warn('[Dashboard Agent] Response timeout - AI took too long');
+          setMessages(prev => prev.map(m => 
+            m.id === id && m.role === 'assistant'
+              ? { ...m, status: 'error', text: 'Sorry, I took too long to respond. Please try asking again.' } as any
+              : m
+          ));
+          activeAssistantIdRef.current = null;
+        }
+      }, 15000); // 15 second timeout
+      
+      return () => clearTimeout(timeout);
+    }
   }, [realtimeSession.isProcessing, realtimeSession.isPlaying, realtimeSession.isStreamComplete, realtimeSession.isPlaybackDrained]);
 
   // Stream text from realtime session - SLOW DOWN TEXT GENERATION
@@ -515,7 +593,11 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
                         ? 'bg-gray-100 text-gray-500 border border-gray-300'
                         : 'bg-white text-gray-800 border border-gray-200'
                     }`}>
-                      {msg.text || (msg.status === 'processing' ? 'Thinking...' : msg.status === 'playing' ? '...' : '')}
+                      {msg.text ? (
+                        <BoldTextRenderer text={msg.text} />
+                      ) : (
+                        msg.status === 'processing' ? 'Thinking...' : msg.status === 'playing' ? '...' : ''
+                      )}
                       {msg.status === 'stopped' && !msg.text && <span className="italic">Response stopped</span>}
                     </div>
                   </div>

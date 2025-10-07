@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, Mic, Send, Square, Pause, Play } from 'lucide-react';
+import { Rnd } from 'react-rnd';
 import { voiceApi } from '../../lib/api';
 import { useOpenAIRealtime } from '../../lib/useOpenAIRealtime';
 import { AvatarLoop } from './AvatarLoop';
@@ -27,6 +28,7 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
   const [textInput, setTextInput] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
+  const [hasShownGreeting, setHasShownGreeting] = useState(false);
   
   const realtimeSession = useOpenAIRealtime();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -140,7 +142,8 @@ RESPONSE STYLE:
 - Warm, supportive, and encouraging (like a helpful health coach)
 - Conversational and natural (not robotic)
 - Clear and simple (easy to understand)
-- Avoid repeating greetings - get to their question quickly
+- DO NOT start with greetings unless user specifically greets you (says "hi", "hello", etc.)
+- Get straight to answering their question
 - Always in English
 
 EXAMPLE CONVERSATIONS:
@@ -190,9 +193,16 @@ Be helpful, accurate, and conversational!`;
     }
   }, [isOpen, isInitialized, userId, realtimeSession, dashboardCards, userSession]);
 
-  // Auto-scroll to latest message
+  // Auto-scroll to latest message - only when NOT actively scrolling
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Only auto-scroll when user is near the bottom (within 100px)
+    const chatContainer = messagesEndRef.current?.parentElement;
+    if (chatContainer) {
+      const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 100;
+      if (isNearBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
   }, [messages]);
 
   // Update assistant message status based on realtime session state
@@ -522,11 +532,37 @@ Be helpful, accurate, and conversational!`;
         </div>
       )}
 
-      {/* Popup Window */}
+      {/* Popup Window - Resizable & Draggable */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-[600px] h-[640px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-purple-50">
+        <Rnd
+          default={{
+            x: window.innerWidth - 624, // 24px from right (right-6 = 24px)
+            y: window.innerHeight - 664, // 24px from bottom (bottom-6 = 24px) 
+            width: 600,
+            height: 640
+          }}
+          minWidth={400}
+          minHeight={500}
+          maxWidth={900}
+          maxHeight={800}
+          bounds="window"
+          dragHandleClassName="drag-handle"
+          className="z-50"
+          style={{ position: 'fixed' }}
+          enableResizing={{
+            top: true,
+            right: true,
+            bottom: true,
+            left: true,
+            topRight: true,
+            bottomRight: true,
+            bottomLeft: true,
+            topLeft: true
+          }}
+        >
+          <div className="w-full h-full bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
+            {/* Header - Draggable */}
+            <div className="drag-handle cursor-move flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-purple-50">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full overflow-hidden relative border-2 border-white shadow-md">
                 {hasCustomImage ? (
@@ -682,7 +718,8 @@ Be helpful, accurate, and conversational!`;
               </button>
             </div>
           </form>
-        </div>
+          </div>
+        </Rnd>
       )}
     </>
   );

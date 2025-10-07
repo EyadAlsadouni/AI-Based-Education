@@ -596,6 +596,14 @@ IMPORTANT INSTRUCTIONS:
 4. For detailed content, tell them to click the card or use the play button
 5. Always use **bold** formatting for card titles and section headers
 6. Be conversational and answer follow-up questions naturally
+7. FORMATTING: When user requests specific format (bullet points, numbered list, etc.), use that format:
+   - For bullet points: Start lines with "- " (dash + space)
+   - For numbered lists: Use "1. ", "2. ", "3. " format
+   - For line breaks: Use actual line breaks between items
+   - Example bullet format:
+     - First point here
+     - Second point here
+     - Third point here
 
 Now answer the user's question using this data.`;
               

@@ -12,6 +12,7 @@ import html2canvas from 'html2canvas';
 import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import AudioManager from '../../lib/useAudioManager';
 import { DashboardVoiceAgent } from '../voice/DashboardVoiceAgent';
+import { Rnd } from 'react-rnd';
 
 // Helper function to format time in MM:SS format
 const formatTime = (seconds: number): string => {
@@ -71,9 +72,24 @@ const ContentModal: React.FC<ContentModalProps> = ({
       className="fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       onClick={handleOverlayClick}
     >
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl border border-gray-200 flex flex-col">
-        {/* Modal Header */}
-        <div className="bg-gray-50 border-b border-gray-200 p-6">
+      <Rnd
+        default={{
+          x: window.innerWidth / 2 - 400,
+          y: 50,
+          width: 800,
+          height: Math.min(window.innerHeight - 100, 700)
+        }}
+        minWidth={600}
+        minHeight={400}
+        maxWidth={1200}
+        maxHeight={window.innerHeight - 100}
+        bounds="parent"
+        dragHandleClassName="modal-drag-handle"
+        style={{ position: 'relative' }}
+      >
+        <div className="bg-white rounded-lg w-full h-full overflow-hidden shadow-2xl border border-gray-200 flex flex-col">
+          {/* Modal Header - Draggable */}
+          <div className="modal-drag-handle cursor-move bg-gray-50 border-b border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-xl">
@@ -319,7 +335,8 @@ const ContentModal: React.FC<ContentModalProps> = ({
             </Button>
           </div>
         </div>
-      </div>
+        </div>
+      </Rnd>
     </div>
   );
 };
@@ -342,6 +359,9 @@ export const DashboardComponent: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [dashboardAudioManager] = useState(() => AudioManager.getInstance());
+  
+  // Right panel toggle
+  const [showRightPanel, setShowRightPanel] = useState(true);
   
   // Audio progress and highlighting states
   const [audioDuration, setAudioDuration] = useState(0);
@@ -801,18 +821,42 @@ export const DashboardComponent: React.FC = () => {
               <p className="text-sm text-gray-500">Patient</p>
               <p className="font-semibold text-gray-900">{firstName}</p>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 font-bold text-lg">
-                {firstName.charAt(0).toUpperCase()}
-              </span>
+            <div className="relative">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-200 transition-colors">
+                <span className="text-blue-600 font-bold text-lg">
+                  {firstName.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              {/* Toggle Button - positioned under profile */}
+              <button
+                onClick={() => setShowRightPanel(!showRightPanel)}
+                className="mt-2 w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors flex items-center justify-center gap-1"
+                title={showRightPanel ? "Hide panel" : "Show panel"}
+              >
+                {showRightPanel ? (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    Hide
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Show
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${showRightPanel ? 'lg:grid-cols-3' : 'lg:grid-cols-1'} transition-all duration-300`}>
         {/* Main Content Area - Left Side */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className={`${showRightPanel ? 'lg:col-span-2' : 'lg:col-span-1'} space-y-6 ${!showRightPanel ? 'w-full' : ''}`}>
           {/* Education Cards Section */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-6 border-b border-gray-200">
@@ -837,7 +881,7 @@ export const DashboardComponent: React.FC = () => {
                     console.log(`Dashboard content keys available:`, Object.keys(dashboardContent || {}));
                     
                     // For dynamic cards, use the contentKey to get content
-                    if ('contentKey' in card) {
+                    if (card.contentKey) {
                       content = (dashboardContent as any)[card.contentKey] || '';
                       console.log(`Card ${card.title} (${card.contentKey}):`, content ? `Has content (${content.length} chars)` : 'No content');
                       if (!content) {
@@ -891,34 +935,6 @@ export const DashboardComponent: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        
-                        {/* Play Button */}
-                        <button
-                          onClick={(e) => handleVoiceRead(card.id, e)}
-                          disabled={isCardGenerating}
-                          className={`absolute top-4 right-4 p-3 rounded-full transition-all hover:scale-110 cursor-pointer ${
-                            isCardGenerating
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : isCardPlaying
-                              ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                              : isCardPaused
-                              ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
-                              : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
-                          }`}
-                          title={isCardGenerating ? 'Generating audio...' : isCardPlaying ? 'Pause audio' : isCardPaused ? 'Resume audio' : 'Play audio'}
-                        >
-                          {isCardGenerating ? (
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
-                          ) : isCardPlaying ? (
-                            <VolumeX className="h-5 w-5" />
-                          ) : isCardPaused ? (
-                            <Volume2 className="h-5 w-5" />
-                          ) : (
-                            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z"/>
-                            </svg>
-                          )}
-                        </button>
                       </div>
                     );
                   })}
@@ -1006,7 +1022,8 @@ export const DashboardComponent: React.FC = () => {
           )}
         </div>
 
-        {/* Patient Summary Sidebar - Right Side */}
+        {/* Patient Summary Sidebar - Right Side - Conditionally Rendered */}
+        {showRightPanel && (
         <div className="space-y-6">
           {/* Patient Summary Card */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -1135,6 +1152,7 @@ export const DashboardComponent: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Audio Control Bar */}

@@ -13,7 +13,7 @@ export interface RealtimeSession {
   lastResponse: string; // full text from model
   visibleResponse: string; // text revealed to UI in sync with audio
   error: string | null;
-  connect: (userId: number, sessionId: string, skipDefaultInstructions?: boolean) => Promise<void>;
+  connect: (userId: number, sessionId: string, skipDefaultInstructions?: boolean, sessionType?: string) => Promise<void>;
   disconnect: () => void;
   startListening: () => void;
   stopListening: () => void;
@@ -90,7 +90,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   }, []);
 
   // Connect to OpenAI Realtime API via our backend
-  const connect = useCallback(async (userId: number, sessionId: string, skipDefaultInstructions?: boolean) => {
+  const connect = useCallback(async (userId: number, sessionId: string, skipDefaultInstructions?: boolean, sessionType?: string) => {
     try {
       setError(null);
       
@@ -101,7 +101,7 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ user_id: userId, session_id: sessionId }),
+        body: JSON.stringify({ user_id: userId, session_id: sessionId, session_type: sessionType || 'voice-coach' }),
       });
 
       if (!response.ok) {
@@ -426,25 +426,37 @@ LANGUAGE:
 
         case 'error':
           const errorDetails = message.error || message;
+          
+          // Check if error is empty/benign FIRST
+          const isEmptyError = !errorDetails || 
+                              Object.keys(errorDetails).length === 0 ||
+                              (errorDetails.error && Object.keys(errorDetails.error).length === 0);
+          
+          if (isEmptyError) {
+            console.warn('[Realtime] Empty error suppressed');
+            hasActiveResponseRef.current = false;
+            break;
+          }
+          
           const errorMessage = errorDetails?.message || 
                               errorDetails?.code || 
                               JSON.stringify(errorDetails) || 
                               'Unknown API error';
+          
           // Treat cancellation-without-active-response as benign
           const lower = String(errorMessage || '').toLowerCase();
           const isBenignCancel = lower.includes('cancellation failed') || 
                                 lower.includes('no active response') ||
                                 lower.includes('buffer too small');
+          
           if (isBenignCancel) {
-            console.warn('Realtime benign error suppressed:', errorMessage);
+            console.warn('[Realtime] Benign error suppressed:', errorMessage);
             hasActiveResponseRef.current = false;
             break;
           }
-          console.error('Realtime API error details:', {
-            type: message.type,
-            error: errorDetails,
-            fullMessage: message
-          });
+          
+          // Only log and show real errors
+          console.error('Realtime API error details:', errorDetails);
           setError(`OpenAI Realtime API error: ${errorMessage}`);
           break;
 

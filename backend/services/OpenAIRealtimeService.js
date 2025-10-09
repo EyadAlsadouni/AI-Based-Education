@@ -10,18 +10,18 @@ class OpenAIRealtimeService {
   }
 
   // Create a realtime session token for the client
-  async createRealtimeToken(userId, sessionId) {
+  async createRealtimeToken(userId, sessionId, sessionType = 'voice-coach') {
     try {
       if (!process.env.OPENAI_API_KEY) {
         throw new Error('OpenAI API key not configured');
       }
 
-      console.log('Creating realtime session for user:', userId, 'session:', sessionId);
+      console.log('Creating realtime session for user:', userId, 'session:', sessionId, 'type:', sessionType);
       
       // Return our proxy WebSocket URL (ChatGPT pattern)
       return {
         token: 'proxy', // We don't send the real token to client
-        ws_url: `ws://localhost:6002/api/realtime/ws?user_id=${userId}&session_id=${sessionId}`,
+        ws_url: `ws://localhost:6002/api/realtime/ws?user_id=${userId}&session_id=${sessionId}&session_type=${sessionType}`,
         model: 'gpt-4o-realtime-preview-2024-10-01',
         expires_at: new Date(Date.now() + 3600000).toISOString()
       };

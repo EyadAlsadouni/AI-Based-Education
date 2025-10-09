@@ -45,14 +45,14 @@ const generateCacheKey = (userId, cardId, contentHash, voiceId) => {
 // POST /api/voice/realtime-token - Get OpenAI Realtime session token
 router.post('/realtime-token', async (req, res) => {
   try {
-    const { user_id, session_id } = req.body;
+    const { user_id, session_id, session_type } = req.body;
 
     if (!user_id || !session_id) {
       return res.status(400).json({ error: 'User ID and session ID are required' });
     }
 
-    // Create realtime session token
-    const tokenData = await realtimeService.createRealtimeToken(user_id, session_id);
+    // Create realtime session token (with session_type for context injection)
+    const tokenData = await realtimeService.createRealtimeToken(user_id, session_id, session_type || 'voice-coach');
 
     res.json({
       success: true,
@@ -554,25 +554,29 @@ router.ws = function(app) {
           }
           
           // 🎯 CONTEXT INJECTION: Automatically inject dashboard data before user messages
+          // Only for dashboard sessions (Voice Coach has separate handling)
+          const sessionType = url.searchParams.get('session_type') || 'dashboard';
+          
           if (message.type === 'conversation.item.create' && 
               message.item?.type === 'message' && 
-              message.item?.role === 'user') {
+              message.item?.role === 'user' &&
+              sessionType === 'dashboard') {
             
-            console.log('[Context Injection] User message detected, injecting dashboard context...');
+            console.log('[Context Injection] 📊 Dashboard user message detected, injecting context...');
             
             try {
               // Fetch complete dashboard context from database
               const context = await realtimeService.getUserContext(userId, 'dashboard context');
               
-              // Build a clear, explicit context message with all dashboard data
+              // Build a clear, explicit context message with FULL dashboard data
               const cardsText = context.dashboard_cards.length > 0 
                 ? context.dashboard_cards.map((card, i) => {
-                    // Include first 300 chars of content as preview
-                    const contentPreview = card.content && card.content !== '(Content not yet generated)' 
-                      ? card.content.substring(0, 300).replace(/\n/g, ' ') + '...'
-                      : 'Content available on request';
-                    return `   ${i + 1}. **${card.title}** - ${card.description}\n      Preview: ${contentPreview}`;
-                  }).join('\n\n')
+                    // Include FULL content for AI assistant capabilities (not just preview)
+                    const fullContent = card.content && card.content !== '(Content not yet generated)' 
+                      ? `\n\n📄 FULL CONTENT:\n${card.content}`
+                      : '\n(Content not yet generated)';
+                    return `   ${i + 1}. **${card.title}** - ${card.description}${fullContent}`;
+                  }).join('\n\n' + '='.repeat(80) + '\n\n')
                 : '   (No cards found)';
               
               const contextText = `[SYSTEM CONTEXT - This is the user's dashboard data. Use it to answer their question.]
@@ -589,23 +593,53 @@ ${cardsText}
 PAGE FEATURES & ACTIONS AVAILABLE:
 - ${context.page_features.features.join('\n- ')}
 
-IMPORTANT INSTRUCTIONS:
-1. You HAVE ACCESS to the user's health profile and card information above
-2. When asked about their health goal, use the "Primary Health Goal" from USER PROFILE
-3. When asked about card content, use the Preview information provided
-4. For detailed content, tell them to click the card or use the play button
-5. Always use **bold** formatting for card titles and section headers
-6. Be conversational and answer follow-up questions naturally
-7. FORMATTING: When user requests specific format (bullet points, numbered list, etc.), use that format:
-   - For bullet points: Start lines with "- " (dash + space)
-   - For numbered lists: Use "1. ", "2. ", "3. " format
-   - For line breaks: Use actual line breaks between items
-   - Example bullet format:
-     - First point here
-     - Second point here
-     - Third point here
+IMPORTANT INSTRUCTIONS - AI ASSISTANT MODE:
+1. You HAVE FULL ACCESS to ALL card content above (not just previews)
+2. When asked about their health goal → use "Primary Health Goal" from USER PROFILE
+3. When asked about card content → READ THE FULL CONTENT and answer accurately
+4. Understand references: "this", "it", "that" → refers to what they're viewing
+5. Be flexible with format: If they ask for bullet points → give bullets. Summary → summarize.
+6. Always use **bold** formatting for card titles and section headers
+7. Be conversational and remember context for follow-ups
+8. FORMATTING: Match the user's requested format:
+   - Bullet points: Use "- " (dash + space)
+   - Numbered lists: Use "1. ", "2. ", "3. "
+   - Line breaks: Use actual line breaks between items
+   - Summaries: Condense into 2-3 paragraphs
+   - Key points: Extract 3-5 main takeaways
 
-Now answer the user's question using this data.`;
+BEHAVIOR:
+- Act like an intelligent assistant (similar to NotebookLM)
+- You can READ and UNDERSTAND the full content
+- Don't say "click the card" - you already have the full content!
+- Be proactive: "Would you like me to explain [related topic]?"
+
+🚨 **CRITICAL - LANGUAGE**: 
+- You MUST respond in English ONLY
+- NEVER respond in Spanish, Arabic, or any other language
+- Even if the user asks in another language, respond in English
+- This is a strict requirement
+
+🚨 **ABSOLUTE PRIORITY - NO GREETINGS**:
+- The user's message is the CURRENT question you must answer
+- DO NOT say "Hello!", "Hi!", "How can I help?", "How can I assist?" UNLESS the user JUST said "hi" or "hello"
+- If the user asks a SPECIFIC question (like "Summarize this"), answer that question IMMEDIATELY
+- Example WRONG: User asks "Summarize this" → You say "Hello! How can I help?" ❌
+- Example RIGHT: User asks "Summarize this" → You immediately provide a summary ✅
+
+🚨 **CRITICAL - RESPONSE QUALITY**:
+- NEVER repeat previous answers - give NEW information
+- ALWAYS answer the CURRENT question, not a previous one
+- If you don't understand, ask for clarification, don't guess
+
+🚨 **CRITICAL - CARD CONTEXT**:
+- The user's message will include: "[Context: User currently has \"[Card Name]\" card open]"
+- When you see this, the user is asking about THAT EXACT card
+- IGNORE any previous card mentions - focus ONLY on the current card in the [Context] tag
+- Example: "[Context: User currently has \"Emergency Care\" card open] Summarize this" → Summarize EMERGENCY CARE, not any other card
+- The card name in [Context] is the ONLY card that matters for this question
+
+Now answer the user's question using the FULL content data above.`;
               
               // Create a system-level context message
               const contextMessage = {

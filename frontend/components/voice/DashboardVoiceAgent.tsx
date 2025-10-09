@@ -11,16 +11,30 @@ interface DashboardVoiceAgentProps {
   userId: number;
   dashboardCards?: any[];
   userSession?: any;
+  selectedCard?: { title: string; content: string; icon: string } | null;
+  dashboardContent?: any;
 }
 
 type ChatMessage = 
   | { id: string; role: 'user'; text: string; createdAt: number; isVoiceInput?: boolean; isTextInput?: boolean }
   | { id: string; role: 'assistant'; text?: string; status: 'processing' | 'playing' | 'paused' | 'finished' | 'stopped' | 'error'; createdAt: number };
 
+// OpenAI Realtime API Voice Options
+// You can change this to customize the voice:
+// 'alloy' (default) - Neutral, balanced
+// 'echo' - Male, calm and soothing
+// 'fable' - British accent, warm
+// 'onyx' - Deep male voice
+// 'nova' - Female, energetic and friendly
+// 'shimmer' - Female, soft and gentle
+const VOICE_AGENT_VOICE = 'onyx'; // <-- Change this to customize voice
+
 export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
   userId,
   dashboardCards = [],
-  userSession
+  userSession,
+  selectedCard = null,
+  dashboardContent = null
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -48,6 +62,7 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
   const textRevealCompleteRef = useRef<boolean>(false);
   const lastFullTextRef = useRef<string>('');
   const lastVoiceTranscriptRef = useRef<string>('');
+  const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [hasCustomImage, setHasCustomImage] = useState<boolean>(true);
 
   // Build comprehensive context about dashboard
@@ -119,55 +134,82 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
     if (isOpen && !isInitialized) {
       const initSession = async () => {
         try {
-          const session = await voiceApi.createSession(userId);
+          const session = await voiceApi.createSession(userId, 'en', 'dashboard');
           setSessionId(session.session_id);
           
-          // Connect to realtime session - skip default instructions
-          await realtimeSession.connect(userId, session.session_id, true);
+          // Connect to realtime session - skip default instructions, specify dashboard type
+          await realtimeSession.connect(userId, session.session_id, true, 'dashboard');
           
           // Send dashboard-specific session configuration immediately after connection
           setTimeout(() => {
             if (realtimeSession.isConnected) {
               console.log('[Dashboard Agent] Sending dashboard-specific instructions...');
               
-              // Create dashboard-specific instructions (simplified - context is auto-injected by backend)
-              const dashboardInstructions = `You are ${userSession?.full_name || 'the user'}'s friendly Dashboard Assistant, here to help them navigate their personalized health dashboard.
+              // Create dashboard-specific instructions (dynamic based on opened card)
+              const openedCardContext = selectedCard ? `
 
-CONTEXT AWARENESS:
-Before every user question, you automatically receive their complete dashboard data including:
+🎯 **CURRENTLY VIEWING**: The user has opened the **${selectedCard.title}** card right now.
+When they say "this", "it", "this card", "explain this", "summarize this", they are referring to **${selectedCard.title}**.
+You have access to the FULL content of this card to answer their questions accurately.` : '';
+
+              const dashboardInstructions = `You are ${userSession?.full_name || 'the user'}'s intelligent Dashboard Assistant - an AI helper that understands what they're looking at and doing.
+
+🎯 VISUAL CONTEXT AWARENESS:${openedCardContext}
+
+WHAT YOU KNOW:
+Before every question, you automatically receive:
 - User profile (name, condition, health goals, medications)
-- All dashboard cards with titles, descriptions, and content previews
+- All dashboard cards with FULL content (not just previews)
+- Which card (if any) is currently open on their screen
 - Available page features and actions
 
+FLEXIBLE QUESTION UNDERSTANDING:
+✅ "this", "that", "it" → Refers to the currently open card
+✅ "summarize this" → Summarize the open card's content
+✅ "explain" / "tell me more" → Provide detailed explanation
+✅ "give me 3 bullet points" → Format response as requested
+✅ "what's in this card?" → Describe the open card's content
+✅ Follow-up questions → Remember conversation context
+
 HOW TO RESPOND:
-1. Answer questions directly using the context data provided
-2. When asked about health goals → Use the "Primary Health Goal" from their profile
-3. When asked about card content → Provide a summary from the preview, then suggest clicking the card for full details
-4. Be conversational and natural - handle follow-up questions smoothly
-5. Use **bold** formatting for card titles and important terms (the UI will render these as bold)
-6. If greeted, respond warmly ONCE, then focus on their actual question
+1. **Be context-aware**: If a card is open and they ask "explain this", you KNOW they mean that card
+2. **Read full content**: You have access to the COMPLETE card content, not just previews
+3. **Format flexibly**: If they ask for bullet points, give bullets. If they ask for a summary, summarize.
+4. **Be conversational**: Handle follow-ups naturally, like "what about exercise?" after discussing diet
+5. **Use bold formatting**: Use **bold** for card titles and key terms
+6. **Be proactive**: Suggest related actions like "Would you like me to explain [another topic]?"
 
 RESPONSE STYLE:
-- Warm, supportive, and encouraging (like a helpful health coach)
+- Like NotebookLM - intelligent, context-aware, helpful assistant
+- Warm but professional (health coach + smart assistant hybrid)
 - Conversational and natural (not robotic)
-- Clear and simple (easy to understand)
-- DO NOT start with greetings unless user specifically greets you (says "hi", "hello", etc.)
-- Get straight to answering their question
+- Clear and concise
+- Get straight to the answer - NO GREETINGS unless user says "hi" or "hello"
+- If user asks a specific question, answer it immediately - don't say "Hello! How can I help?"
 - Always in English
 
-EXAMPLE CONVERSATIONS:
-- "What's my health goal?" → "Your primary health goal is [goal from profile]. Would you like tips on achieving it?"
-- "Summarize the Heart Health card" → "**Heart Health Basics** covers [preview content]. Click the card to read the full content or use the play button to hear an audio summary!"
-- "What can I do here?" → "You can: view your 2 educational cards, click cards for full content, download a PDF report, or ask me about your health information!"
+EXAMPLE INTERACTIONS:
+User: [Opens "Mood Regulation" card, then asks] "Explain this"
+You: "**Mood Regulation** helps you understand how to manage emotional ups and downs with diabetes. The card covers [specific content from the card]... Would you like me to break this down into specific strategies?"
 
-Be helpful, accurate, and conversational!`;
+User: "Give me 4 bullet points about this"
+You: "Here are 4 key points from **Mood Regulation**:
+- [Point 1 from actual content]
+- [Point 2 from actual content]
+- [Point 3 from actual content]
+- [Point 4 from actual content]"
+
+User: "What else should I know?"
+You: [Continues conversation naturally, remembering context]
+
+Be smart, flexible, and truly helpful!`;
 
               // Send session update with dashboard-specific instructions
               // Note: No tools/functions needed - context is auto-injected by backend
               const sessionConfig = {
                 modalities: ['text', 'audio'],
                 instructions: dashboardInstructions,
-                voice: 'alloy',
+                voice: VOICE_AGENT_VOICE,
                 input_audio_format: 'pcm16',
                 output_audio_format: 'pcm16',
                 input_audio_transcription: {
@@ -175,13 +217,15 @@ Be helpful, accurate, and conversational!`;
                 }
               };
               
+              console.log('[Dashboard Agent] 🎤 Using voice:', VOICE_AGENT_VOICE);
               console.log('[Dashboard Agent] Sending session config:', sessionConfig);
               const success = realtimeSession.sendSessionUpdate(sessionConfig);
               
               if (success) {
-                console.log('[Dashboard Agent] Dashboard-specific instructions sent successfully');
+                console.log('[Dashboard Agent] ✅ Dashboard-specific instructions sent successfully');
+                console.log('[Dashboard Agent] ✅ Voice configured:', VOICE_AGENT_VOICE);
               } else {
-                console.warn('[Dashboard Agent] Failed to send dashboard-specific instructions');
+                console.warn('[Dashboard Agent] ❌ Failed to send dashboard-specific instructions');
               }
             }
           }, 100); // Wait for connection to be fully established (minimal delay)
@@ -201,6 +245,90 @@ Be helpful, accurate, and conversational!`;
       initSession();
     }
   }, [isOpen, isInitialized, userId, realtimeSession, dashboardCards, userSession]);
+
+  // Update instructions when selectedCard changes
+  useEffect(() => {
+    if (!isInitialized || !realtimeSession.isConnected) return;
+    
+    console.log('[Dashboard Agent] 🎯 selectedCard changed:', selectedCard?.title || 'None');
+    
+    // Build dynamic instructions with current card context
+    const openedCardContext = selectedCard ? `
+
+🎯 **CURRENTLY VIEWING**: The user has opened the **${selectedCard.title}** card right now.
+When they say "this", "it", "this card", "explain this", "summarize this", they are referring to **${selectedCard.title}**.
+You have access to the FULL content of this card to answer their questions accurately.` : '';
+
+    const updatedInstructions = `You are ${userSession?.full_name || 'the user'}'s intelligent Dashboard Assistant - an AI helper that understands what they're looking at and doing.
+
+🎯 VISUAL CONTEXT AWARENESS:${openedCardContext}
+
+WHAT YOU KNOW:
+Before every question, you automatically receive:
+- User profile (name, condition, health goals, medications)
+- All dashboard cards with FULL content (not just previews)
+- Which card (if any) is currently open on their screen
+- Available page features and actions
+
+FLEXIBLE QUESTION UNDERSTANDING:
+✅ "this", "that", "it" → Refers to the currently open card
+✅ "summarize this" → Summarize the open card's content
+✅ "explain" / "tell me more" → Provide detailed explanation
+✅ "give me 3 bullet points" → Format response as requested
+✅ "what's in this card?" → Describe the open card's content
+✅ Follow-up questions → Remember conversation context
+
+HOW TO RESPOND:
+1. **Be context-aware**: If a card is open and they ask "explain this", you KNOW they mean that card
+2. **Read full content**: You have access to the COMPLETE card content, not just previews
+3. **Format flexibly**: If they ask for bullet points, give bullets. If they ask for a summary, summarize.
+4. **Be conversational**: Handle follow-ups naturally, like "what about exercise?" after discussing diet
+5. **Use bold formatting**: Use **bold** for card titles and key terms
+6. **Be proactive**: Suggest related actions like "Would you like me to explain [another topic]?"
+
+RESPONSE STYLE:
+- Like NotebookLM - intelligent, context-aware, helpful assistant
+- Warm but professional (health coach + smart assistant hybrid)
+- Conversational and natural (not robotic)
+- Clear and concise
+- Get straight to the answer - NO GREETINGS unless user says "hi" or "hello"
+- If user asks a specific question, answer it immediately - don't say "Hello! How can I help?"
+- Always in English
+
+EXAMPLE INTERACTIONS:
+User: [Opens "Mood Regulation" card, then asks] "Explain this"
+You: "**Mood Regulation** helps you understand how to manage emotional ups and downs with diabetes. The card covers [specific content from the card]... Would you like me to break this down into specific strategies?"
+
+User: "Give me 4 bullet points about this"
+You: "Here are 4 key points from **Mood Regulation**:
+- [Point 1 from actual content]
+- [Point 2 from actual content]
+- [Point 3 from actual content]
+- [Point 4 from actual content]"
+
+User: "What else should I know?"
+You: [Continues conversation naturally, remembering context]
+
+Be smart, flexible, and truly helpful!`;
+
+    // Send updated session config
+    const sessionConfig = {
+      modalities: ['text', 'audio'],
+      instructions: updatedInstructions,
+      voice: VOICE_AGENT_VOICE,
+      input_audio_format: 'pcm16',
+      output_audio_format: 'pcm16',
+      input_audio_transcription: {
+        model: 'whisper-1'
+      }
+    };
+    
+    const success = realtimeSession.sendSessionUpdate(sessionConfig);
+    if (success) {
+      console.log('[Dashboard Agent] ✅ Instructions updated with new card context');
+      console.log('[Dashboard Agent] ✅ Voice still configured as:', VOICE_AGENT_VOICE);
+    }
+  }, [selectedCard, isInitialized, realtimeSession.isConnected, userSession]);
 
   // Set initial position when popup opens
   useEffect(() => {
@@ -358,6 +486,13 @@ Be helpful, accurate, and conversational!`;
     const currentText = realtimeSession.visibleResponse;
     const fullText = realtimeSession.lastResponse;
     
+    // Clear timeout when we start receiving response
+    if (fullText && fullText.length > 0 && responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+      console.log('[Dashboard Agent] ✅ Response received, timeout cleared');
+    }
+    
     // If we have full text and current is shorter, we're still streaming
     if (fullText && currentText.length < fullText.length) {
       setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: currentText } : m)));
@@ -437,6 +572,26 @@ Be helpful, accurate, and conversational!`;
     return patterns.some(p => lower.includes(p));
   };
 
+  // Follow-up question detection
+  const isFollowUp = (text: string): boolean => {
+    const lower = text.toLowerCase().trim();
+    const followUpPatterns = [
+      'yes', 'no', 'yeah', 'nope', 'sure', 'of course',
+      'tell me more', 'go deeper', 'continue', 'go on', 
+      'what about', 'how about', 'and', 'also',
+      'more', 'less', 'another', 'different',
+      'same', 'similar', 'like that', 'like this',
+      'elaborate', 'expand', 'detail', 'explain more'
+    ];
+    // Short answers (1-3 words) are likely follow-ups if they match patterns
+    const wordCount = lower.split(' ').length;
+    if (wordCount <= 3) {
+      return followUpPatterns.some(p => lower === p || lower.includes(p));
+    }
+    // Longer questions might still be follow-ups if they start with follow-up indicators
+    return followUpPatterns.some(p => lower.startsWith(p));
+  };
+
   // Check if related to dashboard or health topic
   const isRelatedToTopic = (text: string): boolean => {
     if (topicKeywords.length === 0) return true;
@@ -472,8 +627,9 @@ Be helpful, accurate, and conversational!`;
     setMessages(prev => [...prev, userMsg]);
     activeUserIdRef.current = userMsg.id;
     
-    // Topic filtering - be more lenient for dashboard questions
-    if (!isSmallTalk(trimmed) && !isMetaQuestion(trimmed) && !isRelatedToTopic(trimmed)) {
+    // Topic filtering - be very lenient for dashboard questions and follow-ups
+    // Only block if it's clearly off-topic AND not a follow-up AND not small talk
+    if (!isSmallTalk(trimmed) && !isMetaQuestion(trimmed) && !isFollowUp(trimmed) && !isRelatedToTopic(trimmed)) {
       setMessages(prev => [...prev, {
         id: `a_${Date.now()}`,
         role: 'assistant',
@@ -500,11 +656,39 @@ Be helpful, accurate, and conversational!`;
     textRevealCompleteRef.current = false;
     lastFullTextRef.current = '';
     
-    // Send to AI
-    realtimeSession.sendText(trimmed);
+    // Clear any existing timeout
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+    }
+    
+    // Set response timeout (20 seconds)
+    responseTimeoutRef.current = setTimeout(() => {
+      console.warn('[Dashboard Agent] ⏱️ Response timeout - AI took too long');
+      setMessages(prev => prev.map(m => {
+        if (m.id === asstId && (m as any).status === 'processing') {
+          return {
+            ...m,
+            text: "I apologize, but I'm taking longer than expected to respond. This might be due to a connection issue. Please try asking your question again, or rephrase it slightly differently.",
+            status: 'error'
+          } as any;
+        }
+        return m;
+      }));
+      activeAssistantIdRef.current = null;
+      responseTimeoutRef.current = null;
+    }, 20000); // 20 second timeout
+    
+    // Send to AI with card context if a card is open
+    let messageToSend = trimmed;
+    if (selectedCard) {
+      // Prepend card context to help AI understand "this", "it", etc.
+      messageToSend = `[Context: User currently has "${selectedCard.title}" card open] ${trimmed}`;
+      console.log('[Dashboard Agent] 🎯 Sending message with card context:', selectedCard.title);
+    }
+    realtimeSession.sendText(messageToSend);
     setTextInput('');
     setTimeout(() => { submittingRef.current = false; }, 100);
-  }, [textInput, isInitialized, messages, realtimeSession, isSmallTalk, isMetaQuestion, isRelatedToTopic]);
+  }, [textInput, isInitialized, messages, realtimeSession, isSmallTalk, isMetaQuestion, isFollowUp, isRelatedToTopic, selectedCard]);
 
   // Handle quick chip click
   const handleChipClick = (chipText: string) => {
@@ -520,6 +704,9 @@ Be helpful, accurate, and conversational!`;
       // Stop listening and create assistant placeholder ONCE
       realtimeSession.stopListening();
       
+      // CRITICAL: Clear previous response text BEFORE creating new assistant message
+      realtimeSession.clearBuffers();
+      
       const asstId = `a_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       activeAssistantIdRef.current = asstId;
       setMessages(prev => [...prev, {
@@ -529,9 +716,11 @@ Be helpful, accurate, and conversational!`;
         createdAt: Date.now()
       }]);
       
-      // Reset text reveal
+      // Reset text reveal state
       textRevealCompleteRef.current = false;
       lastFullTextRef.current = '';
+      
+      console.log('[Dashboard Agent] 🎤 Mic stopped - cleared buffers and ready for new response');
       
     } else {
       // Start listening
@@ -550,6 +739,8 @@ Be helpful, accurate, and conversational!`;
       
       // Reset voice transcript tracker
       lastVoiceTranscriptRef.current = '';
+      
+      console.log('[Dashboard Agent] 🎤 Mic started - listening for voice input');
     }
   };
 

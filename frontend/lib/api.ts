@@ -122,8 +122,8 @@ export const aiApi = {
 // Voice Coach API functions
 export const voiceApi = {
   // Create voice session
-  createSession: async (userId: number, lang: string = 'en'): Promise<VoiceSessionResponse> => {
-    const response = await api.post('/voice/session', { user_id: userId, lang });
+  createSession: async (userId: number, lang: string = 'en', sessionType: string = 'voice-coach'): Promise<VoiceSessionResponse> => {
+    const response = await api.post('/voice/session', { user_id: userId, lang, session_type: sessionType });
     return response.data;
   },
 

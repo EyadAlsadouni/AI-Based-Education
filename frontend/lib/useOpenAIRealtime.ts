@@ -230,13 +230,19 @@ LANGUAGE:
           handleRealtimeMessage(message);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error, 'Raw data:', event.data);
-          setError('Failed to parse response from Voice Coach');
+          // Only show parsing errors if they're severe
+          if (error instanceof SyntaxError) {
+            setError('Failed to parse response from Voice Coach');
+          }
         }
       };
 
       wsRef.current.onerror = (error) => {
         console.error('WebSocket error details:', error);
-        setError('Voice Coach connection error');
+        // Only show error if we were previously connected
+        if (isConnected) {
+          setError('Voice Coach connection error');
+        }
         setIsConnected(false);
       };
 
@@ -247,12 +253,15 @@ LANGUAGE:
           wasClean: event.wasClean
         });
         
-        if (event.code === 1006) {
-          setError('Connection lost unexpectedly. Please check your internet connection.');
-        } else if (event.code === 1008) {
+        // Only show critical connection errors to users
+        if (event.code === 1008) {
           setError('Authentication failed. Please refresh and try again.');
-        } else if (event.code !== 1000 && event.code !== 1001) {
-          setError(`Connection closed with error (${event.code}): ${event.reason || 'Unknown reason'}`);
+        } else if (event.code === 1006 && isConnected) {
+          // Only show connection lost if we were actually connected
+          setError('Connection lost unexpectedly. Please check your internet connection.');
+        } else if (event.code !== 1000 && event.code !== 1001 && event.code !== 1006) {
+          // Don't show normal closure or connection lost errors
+          console.warn(`WebSocket closed with code ${event.code}: ${event.reason || 'Unknown reason'}`);
         }
         
         setIsConnected(false);
@@ -440,14 +449,17 @@ LANGUAGE:
           
           const errorMessage = errorDetails?.message || 
                               errorDetails?.code || 
-                              JSON.stringify(errorDetails) || 
+                              (Object.keys(errorDetails || {}).length > 0 ? JSON.stringify(errorDetails) : null) || 
                               'Unknown API error';
           
           // Treat cancellation-without-active-response as benign
           const lower = String(errorMessage || '').toLowerCase();
           const isBenignCancel = lower.includes('cancellation failed') || 
                                 lower.includes('no active response') ||
-                                lower.includes('buffer too small');
+                                lower.includes('buffer too small') ||
+                                lower === 'unknown api error' ||
+                                !errorDetails || 
+                                Object.keys(errorDetails || {}).length === 0;
           
           if (isBenignCancel) {
             console.warn('[Realtime] Benign error suppressed:', errorMessage);
@@ -455,9 +467,14 @@ LANGUAGE:
             break;
           }
           
-          // Only log and show real errors
-          console.error('Realtime API error details:', errorDetails);
-          setError(`OpenAI Realtime API error: ${errorMessage}`);
+          // Only log and show real errors - but don't show empty error details
+          if (errorDetails && Object.keys(errorDetails).length > 0) {
+            console.error('Realtime API error details:', errorDetails);
+            setError(`OpenAI Realtime API error: ${errorMessage}`);
+          } else {
+            console.warn('Realtime API error (empty details) - suppressing display');
+            // Don't set error for empty error details
+          }
           break;
 
         default:
@@ -465,7 +482,10 @@ LANGUAGE:
       }
     } catch (error) {
       console.error('Error handling realtime message:', error);
-      setError('Failed to process response');
+      // Only show critical processing errors
+      if (error instanceof Error && error.message.includes('critical')) {
+        setError('Failed to process response');
+      }
     }
   }, []);
 
@@ -852,7 +872,7 @@ LANGUAGE:
         } else {
           // we didn't get any audio — don't commit empty buffer
           console.warn('Skip commit: no audio recorded (0ms)');
-          setError("I didn't catch that—try speaking a bit longer.");
+          // Don't show error for empty audio - this is normal user behavior
         }
       }
     } finally {
@@ -862,16 +882,22 @@ LANGUAGE:
 
   // Send text input
   const sendText = useCallback((text: string) => {
+    console.log('[useOpenAIRealtime] sendText called:', text.substring(0, 50) + '...');
+    console.log('[useOpenAIRealtime] WebSocket state:', wsRef.current?.readyState, 'hasActiveResponse:', hasActiveResponseRef.current);
+    
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket not connected, cannot send text');
       setError('Not connected to Voice Coach');
       return;
     }
 
-    // Check if there's already an active response
+    // Check if there's already an active response - but be more lenient for first message
     if (hasActiveResponseRef.current) {
-      console.log('Skipping text send - already have active response');
-      return;
+      console.log('Skipping text send - already have active response, but clearing it first');
+      // Clear the active response flag to allow new messages
+      hasActiveResponseRef.current = false;
+      setIsProcessing(false);
+      setIsPlaying(false);
     }
 
     try {
@@ -1019,6 +1045,16 @@ LANGUAGE:
   const clearError = useCallback(() => {
     setError(null);
   }, []);
+
+  // Auto-clear errors after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // Send custom session update
   const sendSessionUpdate = useCallback((sessionConfig: any) => {

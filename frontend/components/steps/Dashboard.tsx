@@ -746,13 +746,20 @@ export const DashboardComponent: React.FC = () => {
       }
       yPosition += 10;
 
-      // Cards content
-      const cards = [
-        { title: 'Diagnosis Basics', content: dashboardContent.diagnosis_basics, icon: '' },
-        { title: 'Nutrition and Carbs', content: dashboardContent.nutrition_carbs, icon: '' },
-        { title: 'Workout', content: dashboardContent.workout, icon: '' },
-        { title: 'Plan Your Day', content: dashboardContent.daily_plan, icon: '' }
-      ];
+      // Cards content - Use the current dynamic cards from dashboard
+      const cards = dynamicCards.map(card => {
+        // Get content from dashboardContent using the card's contentKey
+        let content = '';
+        if (dashboardContent && card.contentKey) {
+          content = dashboardContent[card.contentKey] || '';
+        }
+        
+        return {
+          title: card.title,
+          content: content,
+          icon: card.icon || ''
+        };
+      });
 
       for (const card of cards) {
         // Check if we need a new page
@@ -771,8 +778,16 @@ export const DashboardComponent: React.FC = () => {
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'normal');
         
+        // Use the content from the card (already mapped from dashboardContent)
+        let cardContent = card.content || '';
+        
+        // If no content is available, show a placeholder
+        if (!cardContent) {
+          cardContent = 'Content is being generated. Please wait a moment and try downloading again.';
+        }
+        
         // Clean and split content into lines
-        const cleanContent = (card.content || '')
+        const cleanContent = cardContent
           .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** formatting for cleaner text
           .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters that might cause issues
           .trim();
@@ -786,9 +801,9 @@ export const DashboardComponent: React.FC = () => {
           }
           
           // Handle bold sections by looking for the original ** markers in content
-          if (card.content && card.content.includes('**') && line.length > 0) {
+          if (cardContent && cardContent.includes('**') && line.length > 0) {
             // Simple approach: if the line corresponds to a bold section, make it bold
-            const originalParts = card.content.split(/\*\*(.*?)\*\*/g);
+            const originalParts = cardContent.split(/\*\*(.*?)\*\*/g);
             let isBoldSection = false;
             
             for (let i = 0; i < originalParts.length; i++) {

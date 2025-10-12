@@ -837,25 +837,35 @@ Be smart, flexible, and truly helpful!`;
       {/* Floating Action Button */}
       {!isOpen && (
         <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={() => setIsOpen(true)}
-            className={`w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center transition-all hover:scale-105 ${getFABRingColor()}`}
-            aria-label="Open Voice Assistant"
-          >
-            {/* Try to use user-provided head image, fallback to avatar loop */}
-            <div className="w-16 h-16 rounded-full overflow-hidden relative">
-              {hasCustomImage ? (
-                <img 
-                  src="/assets/voice/agent-head.png" 
-                  alt="Voice Agent"
-                  className="w-full h-full object-cover"
-                  onError={() => setHasCustomImage(false)}
-                />
-              ) : (
-                <AvatarLoop isPlaying={realtimeSession.isPlaying} />
-              )}
+          <div className="group relative">
+            <button
+              onClick={() => setIsOpen(true)}
+              className={`w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center transition-all hover:scale-105 ${getFABRingColor()}`}
+              aria-label="Ask AI Assistant"
+            >
+              {/* Try to use user-provided head image, fallback to avatar loop */}
+              <div className="w-16 h-16 rounded-full overflow-hidden relative">
+                {hasCustomImage ? (
+                  <img 
+                    src="/assets/voice/agent-head.png" 
+                    alt="Voice Agent"
+                    className="w-full h-full object-cover"
+                    onError={() => setHasCustomImage(false)}
+                  />
+                ) : (
+                  <AvatarLoop isPlaying={realtimeSession.isPlaying} />
+                )}
+              </div>
+            </button>
+            
+            {/* Help Label */}
+            <div className="absolute right-24 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+              <div className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg">
+                Ask AI Assistant
+                <div className="absolute left-full top-1/2 transform -translate-y-1/2 w-0 h-0 border-l-4 border-l-gray-900 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+              </div>
             </div>
-          </button>
+          </div>
         </div>
       )}
 

@@ -497,6 +497,7 @@ export interface DashboardCard {
   icon: string;
   priority: number; // 1 = highest priority, 5 = lowest
   contentKey: string; // Key used to store content in backend response
+  userQuestion?: string; // Optional: The user's specific question (for "Your Question" card)
 }
 
 // Card templates for different conditions and scenarios
@@ -654,10 +655,22 @@ export const generateDashboardCards = (
   knowledgeLevel: string,
   mainInterests: string[],
   mainGoals: string[],
-  learningStyle?: string
+  learningStyle?: string,
+  mainQuestion?: string
 ): DashboardCard[] => {
   // Get base cards for the selected condition
   const baseCards = CARD_TEMPLATES[selectedCondition] || [];
+  
+  // Create special "Your Question" card if user asked a specific question
+  const questionCard: DashboardCard | null = mainQuestion && mainQuestion.trim().length > 10 ? {
+    id: 'user_question',
+    title: 'Your Question Answered',
+    description: mainQuestion.length > 80 ? mainQuestion.substring(0, 80) + '...' : mainQuestion,
+    icon: '❓',
+    contentKey: 'user_question',
+    priority: 0, // Highest priority - show first
+    userQuestion: mainQuestion // Store the full question for the AI prompt
+  } : null;
   
   if (baseCards.length === 0) {
     // Fallback to legacy cards if condition not found
@@ -672,9 +685,15 @@ export const generateDashboardCards = (
   const relevantCards = baseCards.filter(card => {
     const cardKeywords = card.title.toLowerCase() + ' ' + card.description.toLowerCase();
     
+    console.log(`\n[Card Filter] Evaluating card: "${card.title}"`);
+    console.log(`[Card Filter] Card keywords: ${cardKeywords.substring(0, 100)}...`);
+    
     // Ensure mainInterests and mainGoals are arrays
     const interestsArray = Array.isArray(mainInterests) ? mainInterests : (mainInterests ? [mainInterests] : []);
     const goalsArray = Array.isArray(mainGoals) ? mainGoals : (mainGoals ? [mainGoals] : []);
+    
+    console.log(`[Card Filter] User already knows (Step 3): ${JSON.stringify(interestsArray)}`);
+    console.log(`[Card Filter] User wants to learn (Step 4): ${JSON.stringify(goalsArray)}`);
     
     // STEP 1: EXCLUDE cards for topics user already knows (mainInterests from Step 3)
     const isAlreadyKnown = interestsArray.some(interest => {
@@ -705,15 +724,26 @@ export const generateDashboardCards = (
       (interestLower.includes('pain') && (cardKeywords.includes('pain') || cardKeywords.includes('discomfort')));
     });
     
+    console.log(`[Card Filter] ❓ Matches Step 3 (already known)? ${isAlreadyKnown}`);
+    
     if (isAlreadyKnown) {
-      console.log(`Excluding card "${card.title}" - user already knows this topic`);
+      console.log(`[Card Filter] ❌ EXCLUDING card "${card.title}" - user already knows this topic`);
       return false;
     }
     
     // STEP 2: INCLUDE cards that support user goals (mainGoals from Step 4)
     const supportsGoals = goalsArray.some(goal => {
       const goalLower = goal.toLowerCase();
-      return cardKeywords.includes(goalLower) ||
+      
+      // Split goal into individual words (like "understand recovery process" → ["understand", "recovery", "process"])
+      const goalWords = goalLower.split(/[\s_-]+/).filter(word => word.length >= 4); // Skip short words
+      
+      // Check if ANY significant word from the goal appears in card keywords
+      const hasWordMatch = goalWords.some(word => cardKeywords.includes(word));
+      
+      return hasWordMatch ||
+             cardKeywords.includes(goalLower) || // Full phrase match
+             // Specific synonyms and related terms
              (goalLower.includes('blood sugar') && (cardKeywords.includes('blood') || cardKeywords.includes('glucose'))) ||
              (goalLower.includes('lower') && (cardKeywords.includes('blood') || cardKeywords.includes('glucose'))) ||
              (goalLower.includes('exercise') && (cardKeywords.includes('exercise') || cardKeywords.includes('workout'))) ||
@@ -723,39 +753,77 @@ export const generateDashboardCards = (
              (goalLower.includes('technique') && (cardKeywords.includes('technique') || cardKeywords.includes('injection') || cardKeywords.includes('inhaler'))) ||
              (goalLower.includes('management') && (cardKeywords.includes('management') || cardKeywords.includes('daily'))) ||
              (goalLower.includes('prevent') && (cardKeywords.includes('prevent') || cardKeywords.includes('complication'))) ||
-             (goalLower.includes('complication') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent')));
+             (goalLower.includes('complication') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent'))) ||
+             (goalLower.includes('recovery') && (cardKeywords.includes('recovery') || cardKeywords.includes('healing') || cardKeywords.includes('post-surgery'))) ||
+             (goalLower.includes('pain') && (cardKeywords.includes('pain') || cardKeywords.includes('discomfort') || cardKeywords.includes('comfort')));
     });
     
+    console.log(`[Card Filter] ❓ Matches Step 4 (user goals)? ${supportsGoals}`);
+    
     if (supportsGoals) {
-      console.log(`Including card "${card.title}" - supports user goals`);
+      console.log(`[Card Filter] ✅ INCLUDING card "${card.title}" - supports user goals`);
       return true;
     }
     
     // STEP 3: Include high-priority cards only if they don't match known topics
     if (card.priority <= 2) {
-      console.log(`Including card "${card.title}" - high priority and not known topic`);
+      console.log(`[Card Filter] ✅ INCLUDING card "${card.title}" - high priority (${card.priority}) and not a known topic`);
       return true;
     }
     
+    console.log(`[Card Filter] ⚪ SKIPPING card "${card.title}" - doesn't match goals and not high priority`);
     return false;
   });
   
-  // Sort by priority (lower number = higher priority) and limit to 5 cards
-  const sortedCards = relevantCards
-    .sort((a, b) => a.priority - b.priority)
-    .slice(0, 5);
+  // Sort by priority (lower number = higher priority)
+  const sortedCards = relevantCards.sort((a, b) => a.priority - b.priority);
   
-  // If we have fewer than 2 cards, add some high-priority cards
-  if (sortedCards.length < 2) {
-    const additionalCards = baseCards
-      .filter(card => !sortedCards.some(selected => selected.id === card.id))
-      .sort((a, b) => a.priority - b.priority)
-      .slice(0, 2 - sortedCards.length);
-    
-    sortedCards.push(...additionalCards);
+  // SMART CARD LIMITING: Determine optimal number of cards based on user selections
+  const goalsArray = Array.isArray(mainGoals) ? mainGoals : (mainGoals ? [mainGoals] : []);
+  const hasQuestion = questionCard !== null;
+  
+  // Calculate optimal card count based on selections
+  let optimalCardCount = 3; // Base: 3 cards minimum
+  
+  // Add 1 card per goal selected (up to 3 additional)
+  const additionalFromGoals = Math.min(goalsArray.length, 3);
+  optimalCardCount += additionalFromGoals;
+  
+  // If user has a question, reduce by 1 (since question card will be added)
+  if (hasQuestion) {
+    optimalCardCount = Math.max(2, optimalCardCount - 1);
   }
   
-  return sortedCards;
+  // Cap at reasonable maximum (5 cards max, or 6 with question)
+  const maxCards = hasQuestion ? 5 : 6;
+  optimalCardCount = Math.min(optimalCardCount, maxCards);
+  
+  console.log(`[Card Filter] 📊 Smart limiting: ${goalsArray.length} goals selected`);
+  console.log(`[Card Filter] 📊 Has question: ${hasQuestion}`);
+  console.log(`[Card Filter] 📊 Optimal card count: ${optimalCardCount} cards (+ question card if applicable)`);
+  
+  // Limit cards to optimal count
+  const limitedCards = sortedCards.slice(0, optimalCardCount);
+  
+  // If we have fewer than 2 cards, add some high-priority cards
+  if (limitedCards.length < 2) {
+    const additionalCards = baseCards
+      .filter(card => !limitedCards.some(selected => selected.id === card.id))
+      .sort((a, b) => a.priority - b.priority)
+      .slice(0, 2 - limitedCards.length);
+    
+    limitedCards.push(...additionalCards);
+  }
+  
+  // Add the "Your Question" card at the beginning if it exists
+  if (questionCard) {
+    console.log(`[Card Filter] ✅ Adding "Your Question" card as first card`);
+    console.log(`[Card Filter] 📊 Final dashboard: 1 question card + ${limitedCards.length} content cards = ${limitedCards.length + 1} total`);
+    return [questionCard, ...limitedCards];
+  }
+  
+  console.log(`[Card Filter] 📊 Final dashboard: ${limitedCards.length} content cards`);
+  return limitedCards;
 };
 
 // Step 3 Learning Discovery Questions

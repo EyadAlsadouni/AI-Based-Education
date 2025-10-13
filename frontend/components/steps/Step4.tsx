@@ -251,7 +251,8 @@ export const Step4Component: React.FC = () => {
         (sessionData as any).knowledge_level || 'new',
         mainInterests,
         mainGoals,
-        formData.learning_style
+        formData.learning_style,
+        formData.main_question
       );
       
       console.log('[Step 4] Generated', dynamicCards.length, 'dynamic cards');

@@ -20,14 +20,7 @@ type ChatMessage =
   | { id: string; role: 'assistant'; text?: string; status: 'processing' | 'playing' | 'paused' | 'finished' | 'stopped' | 'error'; createdAt: number };
 
 // OpenAI Realtime API Voice Options
-// You can change this to customize the voice:
-// 'alloy' (default) - Neutral, balanced
-// 'echo' - Male, calm and soothing
-// 'fable' - British accent, warm
-// 'onyx' - Deep male voice
-// 'nova' - Female, energetic and friendly
-// 'shimmer' - Female, soft and gentle
-const VOICE_AGENT_VOICE = 'onyx'; // <-- Change this to customize voice
+const VOICE_AGENT_VOICE = 'onyx';
 
 export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
   userId,
@@ -64,6 +57,9 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
   const lastVoiceTranscriptRef = useRef<string>('');
   const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [hasCustomImage, setHasCustomImage] = useState<boolean>(true);
+  // CRITICAL: Track last known card count to detect when dashboard is regenerated
+  const lastCardCountRef = useRef<number>(dashboardCards?.length || 0);
+  const dashboardContentHashRef = useRef<string>('');
 
   // Build comprehensive context about dashboard
   const dashboardContext = useMemo(() => {
@@ -129,6 +125,76 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
     return Array.from(new Set(keywords.filter(Boolean)));
   }, [dashboardCards, userSession]);
 
+  // Build session instructions dynamically
+  const buildSessionInstructions = useCallback(() => {
+    const openedCardContext = selectedCard ? `
+
+🎯 **CURRENTLY VIEWING**: The user has opened the **${selectedCard.title}** card right now.
+When they say "this", "it", "this card", "explain this", "summarize this", they are referring to **${selectedCard.title}**.
+You have access to the FULL content of this card to answer their questions accurately.` : '';
+
+    const cardSummary = dashboardCards && dashboardCards.length > 0 
+      ? `The user currently has ${dashboardCards.length} educational cards: ${dashboardCards.map(c => c.title).join(', ')}.`
+      : 'The user has no cards yet.';
+
+    return `You are ${userSession?.full_name || 'the user'}'s intelligent Dashboard Assistant - an AI helper that understands what they're looking at and doing.
+
+🎯 VISUAL CONTEXT AWARENESS:${openedCardContext}
+
+CURRENT DASHBOARD STATE:
+${cardSummary}
+
+WHAT YOU KNOW:
+Before every question, you automatically receive:
+- User profile (name, condition, health goals, medications)
+- All dashboard cards with FULL content (not just previews)
+- Which card (if any) is currently open on their screen
+- Available page features and actions
+
+FLEXIBLE QUESTION UNDERSTANDING:
+✅ "this", "that", "it" → Refers to the currently open card
+✅ "summarize this" → Summarize the open card's content
+✅ "explain" / "tell me more" → Provide detailed explanation
+✅ "give me 3 bullet points" → Format response as requested
+✅ "what's in this card?" → Describe the open card's content
+✅ "how many cards do I have?" → Answer with the current count (${dashboardCards?.length || 0})
+✅ Follow-up questions → Remember conversation context
+
+HOW TO RESPOND:
+1. **Be context-aware**: If a card is open and they ask "explain this", you KNOW they mean that card
+2. **Read full content**: You have access to the COMPLETE card content, not just previews
+3. **Stay updated**: Always use the CURRENT card count and data - if the user regenerated their dashboard, you'll have the latest information
+4. **Format flexibly**: If they ask for bullet points, give bullets. If they ask for a summary, summarize.
+5. **Be conversational**: Handle follow-ups naturally, like "what about exercise?" after discussing diet
+6. **Use bold formatting**: Use **bold** for card titles and key terms
+7. **Be proactive**: Suggest related actions like "Would you like me to explain [another topic]?"
+
+RESPONSE STYLE:
+- Like NotebookLM - intelligent, context-aware, helpful assistant
+- Warm but professional (health coach + smart assistant hybrid)
+- Conversational and natural (not robotic)
+- Clear and concise
+- Get straight to the answer - NO GREETINGS unless user says "hi" or "hello"
+- If user asks a specific question, answer it immediately - don't say "Hello! How can I help?"
+- Always in English
+
+EXAMPLE INTERACTIONS:
+User: "How many cards do I have?"
+You: "You currently have ${dashboardCards?.length || 0} educational cards on your dashboard."
+
+User: [Opens "Mood Regulation" card, then asks] "Explain this"
+You: "**Mood Regulation** helps you understand how to manage emotional ups and downs with diabetes. The card covers [specific content from the card]... Would you like me to break this down into specific strategies?"
+
+User: "Give me 4 bullet points about this"
+You: "Here are 4 key points from **Mood Regulation**:
+- [Point 1 from actual content]
+- [Point 2 from actual content]
+- [Point 3 from actual content]
+- [Point 4 from actual content]"
+
+Be smart, flexible, and truly helpful!`;
+  }, [dashboardCards, userSession, selectedCard]);
+
   // Initialize voice session with dashboard-specific system instructions
   useEffect(() => {
     if (isOpen && !isInitialized) {
@@ -145,67 +211,9 @@ export const DashboardVoiceAgent: React.FC<DashboardVoiceAgentProps> = ({
             if (realtimeSession.isConnected) {
               console.log('[Dashboard Agent] Sending dashboard-specific instructions...');
               
-              // Create dashboard-specific instructions (dynamic based on opened card)
-              const openedCardContext = selectedCard ? `
-
-🎯 **CURRENTLY VIEWING**: The user has opened the **${selectedCard.title}** card right now.
-When they say "this", "it", "this card", "explain this", "summarize this", they are referring to **${selectedCard.title}**.
-You have access to the FULL content of this card to answer their questions accurately.` : '';
-
-              const dashboardInstructions = `You are ${userSession?.full_name || 'the user'}'s intelligent Dashboard Assistant - an AI helper that understands what they're looking at and doing.
-
-🎯 VISUAL CONTEXT AWARENESS:${openedCardContext}
-
-WHAT YOU KNOW:
-Before every question, you automatically receive:
-- User profile (name, condition, health goals, medications)
-- All dashboard cards with FULL content (not just previews)
-- Which card (if any) is currently open on their screen
-- Available page features and actions
-
-FLEXIBLE QUESTION UNDERSTANDING:
-✅ "this", "that", "it" → Refers to the currently open card
-✅ "summarize this" → Summarize the open card's content
-✅ "explain" / "tell me more" → Provide detailed explanation
-✅ "give me 3 bullet points" → Format response as requested
-✅ "what's in this card?" → Describe the open card's content
-✅ Follow-up questions → Remember conversation context
-
-HOW TO RESPOND:
-1. **Be context-aware**: If a card is open and they ask "explain this", you KNOW they mean that card
-2. **Read full content**: You have access to the COMPLETE card content, not just previews
-3. **Format flexibly**: If they ask for bullet points, give bullets. If they ask for a summary, summarize.
-4. **Be conversational**: Handle follow-ups naturally, like "what about exercise?" after discussing diet
-5. **Use bold formatting**: Use **bold** for card titles and key terms
-6. **Be proactive**: Suggest related actions like "Would you like me to explain [another topic]?"
-
-RESPONSE STYLE:
-- Like NotebookLM - intelligent, context-aware, helpful assistant
-- Warm but professional (health coach + smart assistant hybrid)
-- Conversational and natural (not robotic)
-- Clear and concise
-- Get straight to the answer - NO GREETINGS unless user says "hi" or "hello"
-- If user asks a specific question, answer it immediately - don't say "Hello! How can I help?"
-- Always in English
-
-EXAMPLE INTERACTIONS:
-User: [Opens "Mood Regulation" card, then asks] "Explain this"
-You: "**Mood Regulation** helps you understand how to manage emotional ups and downs with diabetes. The card covers [specific content from the card]... Would you like me to break this down into specific strategies?"
-
-User: "Give me 4 bullet points about this"
-You: "Here are 4 key points from **Mood Regulation**:
-- [Point 1 from actual content]
-- [Point 2 from actual content]
-- [Point 3 from actual content]
-- [Point 4 from actual content]"
-
-User: "What else should I know?"
-You: [Continues conversation naturally, remembering context]
-
-Be smart, flexible, and truly helpful!`;
+              const dashboardInstructions = buildSessionInstructions();
 
               // Send session update with dashboard-specific instructions
-              // Note: No tools/functions needed - context is auto-injected by backend
               const sessionConfig = {
                 modalities: ['text', 'audio'],
                 instructions: dashboardInstructions,
@@ -218,17 +226,20 @@ Be smart, flexible, and truly helpful!`;
               };
               
               console.log('[Dashboard Agent] 🎤 Using voice:', VOICE_AGENT_VOICE);
-              console.log('[Dashboard Agent] Sending session config:', sessionConfig);
+              console.log('[Dashboard Agent] 📊 Current card count:', dashboardCards?.length || 0);
               const success = realtimeSession.sendSessionUpdate(sessionConfig);
               
               if (success) {
                 console.log('[Dashboard Agent] ✅ Dashboard-specific instructions sent successfully');
-                console.log('[Dashboard Agent] ✅ Voice configured:', VOICE_AGENT_VOICE);
+                // Store initial card count
+                lastCardCountRef.current = dashboardCards?.length || 0;
+                // Store initial dashboard content hash
+                dashboardContentHashRef.current = JSON.stringify(dashboardContent);
               } else {
                 console.warn('[Dashboard Agent] ❌ Failed to send dashboard-specific instructions');
               }
             }
-          }, 100); // Wait for connection to be fully established (minimal delay)
+          }, 100);
           
           setIsInitialized(true);
         } catch (error) {
@@ -244,7 +255,53 @@ Be smart, flexible, and truly helpful!`;
       };
       initSession();
     }
-  }, [isOpen, isInitialized, userId, realtimeSession, dashboardCards, userSession]);
+  }, [isOpen, isInitialized, userId, realtimeSession, buildSessionInstructions, dashboardCards, dashboardContent]);
+
+  // CRITICAL: Watch for dashboard changes (when user regenerates dashboard)
+  useEffect(() => {
+    if (!isInitialized || !realtimeSession.isConnected) return;
+    
+    const currentCardCount = dashboardCards?.length || 0;
+    const currentContentHash = JSON.stringify(dashboardContent);
+    
+    // Check if dashboard has changed (card count or content changed)
+    const cardsChanged = currentCardCount !== lastCardCountRef.current;
+    const contentChanged = currentContentHash !== dashboardContentHashRef.current;
+    
+    if (cardsChanged || contentChanged) {
+      console.log('[Dashboard Agent] 🔄 Dashboard data changed!');
+      console.log('[Dashboard Agent] Previous card count:', lastCardCountRef.current);
+      console.log('[Dashboard Agent] New card count:', currentCardCount);
+      console.log('[Dashboard Agent] Content changed:', contentChanged);
+      console.log('[Dashboard Agent] Refreshing AI context...');
+      
+      // Update stored values
+      lastCardCountRef.current = currentCardCount;
+      dashboardContentHashRef.current = currentContentHash;
+      
+      // Refresh AI instructions with new data
+      const updatedInstructions = buildSessionInstructions();
+      
+      const sessionConfig = {
+        modalities: ['text', 'audio'],
+        instructions: updatedInstructions,
+        voice: VOICE_AGENT_VOICE,
+        input_audio_format: 'pcm16',
+        output_audio_format: 'pcm16',
+        input_audio_transcription: {
+          model: 'whisper-1'
+        }
+      };
+      
+      const success = realtimeSession.sendSessionUpdate(sessionConfig);
+      if (success) {
+        console.log('[Dashboard Agent] ✅ AI context updated with new dashboard data');
+        console.log('[Dashboard Agent] ✅ AI now knows about', currentCardCount, 'cards');
+      } else {
+        console.warn('[Dashboard Agent] ❌ Failed to update AI context');
+      }
+    }
+  }, [dashboardCards, dashboardContent, isInitialized, realtimeSession.isConnected, buildSessionInstructions]);
 
   // Update instructions when selectedCard changes
   useEffect(() => {
@@ -252,64 +309,7 @@ Be smart, flexible, and truly helpful!`;
     
     console.log('[Dashboard Agent] 🎯 selectedCard changed:', selectedCard?.title || 'None');
     
-    // Build dynamic instructions with current card context
-    const openedCardContext = selectedCard ? `
-
-🎯 **CURRENTLY VIEWING**: The user has opened the **${selectedCard.title}** card right now.
-When they say "this", "it", "this card", "explain this", "summarize this", they are referring to **${selectedCard.title}**.
-You have access to the FULL content of this card to answer their questions accurately.` : '';
-
-    const updatedInstructions = `You are ${userSession?.full_name || 'the user'}'s intelligent Dashboard Assistant - an AI helper that understands what they're looking at and doing.
-
-🎯 VISUAL CONTEXT AWARENESS:${openedCardContext}
-
-WHAT YOU KNOW:
-Before every question, you automatically receive:
-- User profile (name, condition, health goals, medications)
-- All dashboard cards with FULL content (not just previews)
-- Which card (if any) is currently open on their screen
-- Available page features and actions
-
-FLEXIBLE QUESTION UNDERSTANDING:
-✅ "this", "that", "it" → Refers to the currently open card
-✅ "summarize this" → Summarize the open card's content
-✅ "explain" / "tell me more" → Provide detailed explanation
-✅ "give me 3 bullet points" → Format response as requested
-✅ "what's in this card?" → Describe the open card's content
-✅ Follow-up questions → Remember conversation context
-
-HOW TO RESPOND:
-1. **Be context-aware**: If a card is open and they ask "explain this", you KNOW they mean that card
-2. **Read full content**: You have access to the COMPLETE card content, not just previews
-3. **Format flexibly**: If they ask for bullet points, give bullets. If they ask for a summary, summarize.
-4. **Be conversational**: Handle follow-ups naturally, like "what about exercise?" after discussing diet
-5. **Use bold formatting**: Use **bold** for card titles and key terms
-6. **Be proactive**: Suggest related actions like "Would you like me to explain [another topic]?"
-
-RESPONSE STYLE:
-- Like NotebookLM - intelligent, context-aware, helpful assistant
-- Warm but professional (health coach + smart assistant hybrid)
-- Conversational and natural (not robotic)
-- Clear and concise
-- Get straight to the answer - NO GREETINGS unless user says "hi" or "hello"
-- If user asks a specific question, answer it immediately - don't say "Hello! How can I help?"
-- Always in English
-
-EXAMPLE INTERACTIONS:
-User: [Opens "Mood Regulation" card, then asks] "Explain this"
-You: "**Mood Regulation** helps you understand how to manage emotional ups and downs with diabetes. The card covers [specific content from the card]... Would you like me to break this down into specific strategies?"
-
-User: "Give me 4 bullet points about this"
-You: "Here are 4 key points from **Mood Regulation**:
-- [Point 1 from actual content]
-- [Point 2 from actual content]
-- [Point 3 from actual content]
-- [Point 4 from actual content]"
-
-User: "What else should I know?"
-You: [Continues conversation naturally, remembering context]
-
-Be smart, flexible, and truly helpful!`;
+    const updatedInstructions = buildSessionInstructions();
 
     // Send updated session config
     const sessionConfig = {
@@ -326,9 +326,8 @@ Be smart, flexible, and truly helpful!`;
     const success = realtimeSession.sendSessionUpdate(sessionConfig);
     if (success) {
       console.log('[Dashboard Agent] ✅ Instructions updated with new card context');
-      console.log('[Dashboard Agent] ✅ Voice still configured as:', VOICE_AGENT_VOICE);
     }
-  }, [selectedCard, isInitialized, realtimeSession.isConnected, userSession]);
+  }, [selectedCard, isInitialized, realtimeSession.isConnected, buildSessionInstructions]);
 
   // Set initial position when popup opens
   useEffect(() => {
@@ -428,7 +427,6 @@ Be smart, flexible, and truly helpful!`;
 
   // Auto-scroll to latest message - only when NOT actively scrolling
   useEffect(() => {
-    // Only auto-scroll when user is near the bottom (within 100px)
     const chatContainer = messagesEndRef.current?.parentElement;
     if (chatContainer) {
       const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 100;
@@ -460,25 +458,30 @@ Be smart, flexible, and truly helpful!`;
       return m;
     }));
     
-    // Timeout handler: If stuck in "processing" for too long, show error
+    // IMPROVED: Faster timeout for stuck responses
     if (realtimeSession.isProcessing) {
       const timeout = setTimeout(() => {
         if (activeAssistantIdRef.current === id && realtimeSession.isProcessing) {
-          console.warn('[Dashboard Agent] Response timeout - AI took too long');
+          console.warn('[Dashboard Agent] ⏰ Response timeout - AI took too long');
           setMessages(prev => prev.map(m => 
             m.id === id && m.role === 'assistant'
               ? { ...m, status: 'error', text: 'Sorry, I took too long to respond. Please try asking again.' } as any
               : m
           ));
           activeAssistantIdRef.current = null;
+          // Clear timeout ref
+          if (responseTimeoutRef.current) {
+            clearTimeout(responseTimeoutRef.current);
+            responseTimeoutRef.current = null;
+          }
         }
-      }, 15000); // 15 second timeout
+      }, 20000); // 20 second timeout (reduced from 15 for better balance)
       
       return () => clearTimeout(timeout);
     }
   }, [realtimeSession.isProcessing, realtimeSession.isPlaying, realtimeSession.isStreamComplete, realtimeSession.isPlaybackDrained]);
 
-  // Stream text from realtime session - SLOW DOWN TEXT GENERATION
+  // Stream text from realtime session - IMPROVED synchronization
   useEffect(() => {
     const id = activeAssistantIdRef.current;
     if (!id) return;
@@ -490,42 +493,43 @@ Be smart, flexible, and truly helpful!`;
     if (fullText && fullText.length > 0 && responseTimeoutRef.current) {
       clearTimeout(responseTimeoutRef.current);
       responseTimeoutRef.current = null;
-      console.log('[Dashboard Agent] ✅ Response received, timeout cleared');
     }
     
-    // If we have full text and current is shorter, we're still streaming
-    if (fullText && currentText.length < fullText.length) {
-      setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: currentText } : m)));
-      textRevealCompleteRef.current = false;
-      lastFullTextRef.current = fullText;
-    }
-    // If current equals full, streaming is complete - LOCK IT
-    else if (fullText && currentText.length >= fullText.length && !textRevealCompleteRef.current) {
+    // IMPROVED: Better text locking logic
+    // If we have full text and current equals or exceeds it, we're done
+    if (fullText && currentText.length >= fullText.length && !textRevealCompleteRef.current) {
       setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: fullText } : m)));
       textRevealCompleteRef.current = true;
       lastFullTextRef.current = fullText;
-      console.log('[Dashboard Agent] Text reveal complete - locked at full answer');
-    }
-    // If locked, don't update anymore
-    else if (textRevealCompleteRef.current) {
+      console.log('[Dashboard Agent] ✅ Text reveal complete - locked');
       return;
     }
-    // Fallback
-    else {
+    
+    // If locked, don't update anymore
+    if (textRevealCompleteRef.current && fullText === lastFullTextRef.current) {
+      return;
+    }
+    
+    // Otherwise, update with current visible text
+    if (currentText || fullText) {
       setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: currentText } : m)));
     }
   }, [realtimeSession.visibleResponse, realtimeSession.lastResponse]);
 
-  // Handle voice transcript updates - PREVENT DUPLICATION
+  // Handle voice transcript updates - IMPROVED duplication prevention
   useEffect(() => {
     const transcript = realtimeSession.currentTranscript?.trim();
     if (!transcript) return;
     
-    // Prevent creating duplicate messages for the same transcript
-    if (transcript === lastVoiceTranscriptRef.current) return;
+    // CRITICAL: Prevent creating duplicate messages for the same transcript
+    if (transcript === lastVoiceTranscriptRef.current) {
+      return;
+    }
     
     // Don't create voice messages if submitting text
-    if (submittingRef.current) return;
+    if (submittingRef.current) {
+      return;
+    }
     
     // Find or create voice user message
     setMessages(prev => {
@@ -583,12 +587,10 @@ Be smart, flexible, and truly helpful!`;
       'same', 'similar', 'like that', 'like this',
       'elaborate', 'expand', 'detail', 'explain more'
     ];
-    // Short answers (1-3 words) are likely follow-ups if they match patterns
     const wordCount = lower.split(' ').length;
     if (wordCount <= 3) {
       return followUpPatterns.some(p => lower === p || lower.includes(p));
     }
-    // Longer questions might still be follow-ups if they start with follow-up indicators
     return followUpPatterns.some(p => lower.startsWith(p));
   };
 
@@ -627,8 +629,7 @@ Be smart, flexible, and truly helpful!`;
     setMessages(prev => [...prev, userMsg]);
     activeUserIdRef.current = userMsg.id;
     
-    // Topic filtering - be very lenient for dashboard questions and follow-ups
-    // Only block if it's clearly off-topic AND not a follow-up AND not small talk
+    // Topic filtering - be very lenient
     if (!isSmallTalk(trimmed) && !isMetaQuestion(trimmed) && !isFollowUp(trimmed) && !isRelatedToTopic(trimmed)) {
       setMessages(prev => [...prev, {
         id: `a_${Date.now()}`,
@@ -668,7 +669,7 @@ Be smart, flexible, and truly helpful!`;
         if (m.id === asstId && (m as any).status === 'processing') {
           return {
             ...m,
-            text: "I apologize, but I'm taking longer than expected to respond. This might be due to a connection issue. Please try asking your question again, or rephrase it slightly differently.",
+            text: "I apologize, but I'm taking longer than expected to respond. Please try asking your question again.",
             status: 'error'
           } as any;
         }
@@ -676,12 +677,11 @@ Be smart, flexible, and truly helpful!`;
       }));
       activeAssistantIdRef.current = null;
       responseTimeoutRef.current = null;
-    }, 20000); // 20 second timeout
+    }, 20000);
     
     // Send to AI with card context if a card is open
     let messageToSend = trimmed;
     if (selectedCard) {
-      // Prepend card context to help AI understand "this", "it", etc.
       messageToSend = `[Context: User currently has "${selectedCard.title}" card open] ${trimmed}`;
       console.log('[Dashboard Agent] 🎯 Sending message with card context:', selectedCard.title);
     }
@@ -696,7 +696,7 @@ Be smart, flexible, and truly helpful!`;
     inputRef.current?.focus();
   };
 
-  // Toggle mic (push-to-talk) - PREVENT DUPLICATION
+  // Toggle mic (push-to-talk) - IMPROVED duplication prevention
   const toggleMic = () => {
     if (!isInitialized) return;
     
@@ -704,9 +704,8 @@ Be smart, flexible, and truly helpful!`;
       // Stop listening and create assistant placeholder ONCE
       realtimeSession.stopListening();
       
-      // CRITICAL: Clear previous response text BEFORE creating new assistant message
-      realtimeSession.clearBuffers();
-      
+      // CRITICAL: Response creation is now handled in useOpenAIRealtime.ts stopListening
+      // Just prepare UI for response
       const asstId = `a_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       activeAssistantIdRef.current = asstId;
       setMessages(prev => [...prev, {
@@ -720,7 +719,7 @@ Be smart, flexible, and truly helpful!`;
       textRevealCompleteRef.current = false;
       lastFullTextRef.current = '';
       
-      console.log('[Dashboard Agent] 🎤 Mic stopped - cleared buffers and ready for new response');
+      console.log('[Dashboard Agent] 🎤 Mic stopped - waiting for response');
       
     } else {
       // Start listening
@@ -740,7 +739,7 @@ Be smart, flexible, and truly helpful!`;
       // Reset voice transcript tracker
       lastVoiceTranscriptRef.current = '';
       
-      console.log('[Dashboard Agent] 🎤 Mic started - listening for voice input');
+      console.log('[Dashboard Agent] 🎤 Mic started - listening');
     }
   };
 
@@ -752,12 +751,10 @@ Be smart, flexible, and truly helpful!`;
     setMessages(prev => prev.map(m => {
       if (m.role === 'assistant' && m.id === asstId) {
         if ((m as any).status === 'paused') {
-          console.log('[Dashboard Agent] Resume clicked');
           realtimeSession.resumeOutput();
           return { ...m, status: 'playing' } as any;
         }
         if (['playing', 'processing'].includes((m as any).status as any)) {
-          console.log('[Dashboard Agent] Pause clicked');
           realtimeSession.pauseOutput();
           return { ...m, status: 'paused' } as any;
         }
@@ -782,7 +779,7 @@ Be smart, flexible, and truly helpful!`;
   const quickChips = [
     'What can I do here?',
     'Explain this page',
-    'What cards do I have?',
+    'How many cards do I have?',
     `Tell me about ${dashboardCards[0]?.title || 'the first card'}`
   ];
 
@@ -806,29 +803,38 @@ Be smart, flexible, and truly helpful!`;
       {/* Floating Action Button */}
       {!isOpen && (
         <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={() => setIsOpen(true)}
-            className={`w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center transition-all hover:scale-105 ${getFABRingColor()}`}
-            aria-label="Open Voice Assistant"
-          >
-            {/* Try to use user-provided head image, fallback to avatar loop */}
-            <div className="w-16 h-16 rounded-full overflow-hidden relative">
-              {hasCustomImage ? (
-                <img 
-                  src="/assets/voice/agent-head.png" 
-                  alt="Voice Agent"
-                  className="w-full h-full object-cover"
-                  onError={() => setHasCustomImage(false)}
-                />
-              ) : (
-                <AvatarLoop isPlaying={realtimeSession.isPlaying} />
-              )}
+          <div className="group relative">
+            <button
+              onClick={() => setIsOpen(true)}
+              className={`w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center transition-all hover:scale-105 ${getFABRingColor()}`}
+              aria-label="Ask AI Assistant"
+            >
+              <div className="w-16 h-16 rounded-full overflow-hidden relative">
+                {hasCustomImage ? (
+                  <img 
+                    src="/assets/voice/agent-head.png" 
+                    alt="Voice Agent"
+                    className="w-full h-full object-cover"
+                    onError={() => setHasCustomImage(false)}
+                  />
+                ) : (
+                  <AvatarLoop isPlaying={realtimeSession.isPlaying} />
+                )}
+              </div>
+            </button>
+            
+            {/* Help Label */}
+            <div className="absolute right-24 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+              <div className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg">
+                Ask AI Assistant
+                <div className="absolute left-full top-1/2 transform -translate-y-1/2 w-0 h-0 border-l-4 border-l-gray-900 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+              </div>
             </div>
-          </button>
+          </div>
         </div>
       )}
 
-      {/* Popup Window - Custom Draggable & Resizable */}
+      {/* Popup Window */}
       {isOpen && (
         <div
           ref={popupRef}
@@ -843,7 +849,7 @@ Be smart, flexible, and truly helpful!`;
           onMouseDown={handleMouseDown}
         >
           <div className="w-full h-full bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden relative">
-            {/* Header - Draggable */}
+            {/* Header */}
             <div className="drag-handle cursor-move flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-blue-50 to-purple-50">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full overflow-hidden relative border-2 border-white shadow-md">
@@ -931,13 +937,13 @@ Be smart, flexible, and truly helpful!`;
               {realtimeSession.isListening && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                  Listening... (click Mic to stop)
+                  Listening...
                 </span>
               )}
               {realtimeSession.isProcessing && !realtimeSession.isListening && '⏳ Processing...'}
               {realtimeSession.isPlaying && '🔊 Speaking...'}
               {!realtimeSession.isListening && !realtimeSession.isProcessing && !realtimeSession.isPlaying && (
-                <span className="text-green-600">✓ Ready to help!</span>
+                <span className="text-green-600">✓ Ready!</span>
               )}
             </div>
             
@@ -994,21 +1000,18 @@ Be smart, flexible, and truly helpful!`;
                     ? 'bg-red-600 text-white hover:bg-red-700 animate-pulse' 
                     : 'bg-purple-600 text-white hover:bg-purple-700'
                 } disabled:bg-gray-200 disabled:cursor-not-allowed`}
-                title={realtimeSession.isListening ? 'Stop speaking' : 'Start speaking (Push-to-talk)'}
+                title={realtimeSession.isListening ? 'Stop speaking' : 'Start speaking'}
               >
                 <Mic className="w-4 h-4" />
               </button>
             </div>
           </form>
           
-          {/* Resize Handles - 8 directions */}
-          {/* Corners */}
+          {/* Resize Handles */}
           <div onMouseDown={(e) => handleResizeMouseDown(e, 'nw')} className="absolute top-0 left-0 w-3 h-3 cursor-nw-resize" />
           <div onMouseDown={(e) => handleResizeMouseDown(e, 'ne')} className="absolute top-0 right-0 w-3 h-3 cursor-ne-resize" />
           <div onMouseDown={(e) => handleResizeMouseDown(e, 'sw')} className="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize" />
           <div onMouseDown={(e) => handleResizeMouseDown(e, 'se')} className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize" />
-          
-          {/* Edges */}
           <div onMouseDown={(e) => handleResizeMouseDown(e, 'n')} className="absolute top-0 left-3 right-3 h-1 cursor-n-resize" />
           <div onMouseDown={(e) => handleResizeMouseDown(e, 's')} className="absolute bottom-0 left-3 right-3 h-1 cursor-s-resize" />
           <div onMouseDown={(e) => handleResizeMouseDown(e, 'w')} className="absolute left-0 top-3 bottom-3 w-1 cursor-w-resize" />

@@ -12,6 +12,11 @@ This document contains all the errors we've encountered during Voice Coach devel
 6. [Voice Agent Language Issues](#voice-agent-language-issues)
 7. [Mic Auto-Stop Issues](#mic-auto-stop-issues)
 8. [Stop Button Functionality](#stop-button-functionality)
+9. **[NEW] Stuck "Thinking..." Forever**](#stuck-thinking-forever)
+10. **[NEW] Voice/Text Lag Issues**](#voicetext-lag-issues)
+11. **[NEW] AI Not Updating with New Data**](#ai-not-updating-with-new-data)
+12. **[NEW] Not Answering Latest Question**](#not-answering-latest-question)
+13. **[NEW] Empty Error Messages**](#empty-error-messages)
 
 ---
 
@@ -338,6 +343,521 @@ This document contains all the errors we've encountered during Voice Coach devel
 
 ---
 
+### Stuck "Thinking..." Forever
+
+**Error Message:** Voice agent shows "Thinking..." but never provides a response, even after waiting minutes.
+
+**Root Cause:** The `hasActiveResponseRef.current` flag gets stuck as `true` and never resets, blocking all new responses. This happens when:
+- Response completes but flag isn't cleared
+- Error occurs but flag remains set
+- User interrupts but flag persists
+- Connection issues leave flag in stuck state
+
+**Solutions Applied:**
+
+1. **Aggressive Flag Reset on Connection:**
+   ```typescript
+   wsRef.current.onopen = () => {
+     console.log('WebSocket connected successfully');
+     setIsConnected(true);
+     // CRITICAL: Force reset active response flag on new connection
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     console.log('[Connection] ✅ Active response flag reset');
+   };
+   ```
+
+2. **Force Reset Before All New Interactions:**
+   ```typescript
+   // In startListening()
+   const startListening = useCallback(async () => {
+     // CRITICAL: Force clear everything before starting new interaction
+     console.log('[Listening] Force clearing state before starting');
+     clearBuffers();
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     // ... rest of function
+   }, [clearBuffers]);
+   
+   // In sendText()
+   const sendText = useCallback((text: string) => {
+     // CRITICAL: Force clear state before sending text
+     console.log('[SendText] Force clearing state before sending');
+     clearBuffers();
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     // ... rest of function
+   }, [clearBuffers]);
+   ```
+
+3. **Reduced Timeout for Faster Recovery:**
+   ```typescript
+   case 'response.created':
+     hasActiveResponseRef.current = true;
+     setIsProcessing(true);
+     
+     // CRITICAL: Reduced timeout from 30s to 25s
+     setTimeout(() => {
+       if (hasActiveResponseRef.current) {
+         console.log('[Timeout] ⏰ Force resetting active response flag');
+         hasActiveResponseRef.current = false;
+         setIsProcessing(false);
+       }
+     }, 25000); // 25 second timeout
+     break;
+   ```
+
+4. **Enhanced clearBuffers Function:**
+   ```typescript
+   const clearBuffers = useCallback(() => {
+     console.log('[Clear] Clearing all buffers and state');
+     // ... clear audio and text
+     // CRITICAL: Force reset active response flag
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     console.log('[Clear] ✅ All buffers cleared, active response reset');
+   }, []);
+   ```
+
+5. **Improved bargeIn Function:**
+   ```typescript
+   const bargeIn = useCallback(() => {
+     console.log('[BargeIn] Interrupting current response');
+     // ... stop audio and text
+     // Regardless, mark no active response
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     console.log('[BargeIn] ✅ Interrupted and reset active response flag');
+   }, []);
+   ```
+
+6. **Enhanced Error Handling:**
+   ```typescript
+   case 'error':
+     // ... error processing
+     // Always reset flag on error
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     break;
+   ```
+
+**Files Modified:** `frontend/lib/useOpenAIRealtime.ts`
+
+**Testing:** 
+- Start voice input → stop → verify response appears within 5 seconds
+- Send text message → verify response appears within 5 seconds
+- Interrupt response → send new message → verify new response appears
+- Wait for timeout → verify error shows and can retry
+
+---
+
+### Voice/Text Lag Issues
+
+**Error Message:** Voice and text generation are laggy or stuttering. Text doesn't sync smoothly with audio.
+
+**Root Cause:** Text reveal speed (18 chars/second) was too fast, causing:
+- Text finishing before audio completes
+- Desynchronization between text and speech
+- Jerky text display
+- Text continuing to update after audio stops
+
+**Solutions Applied:**
+
+1. **Reduced Text Reveal Speed:**
+   ```typescript
+   // Before: Too fast, causes desync
+   const charsPerSecondRef = useRef<number>(18);
+   
+   // After: Optimized for smooth sync
+   const charsPerSecondRef = useRef<number>(12);
+   ```
+
+2. **Improved Text Locking Logic:**
+   ```typescript
+   // In text streaming effect
+   useEffect(() => {
+     const currentText = realtimeSession.visibleResponse;
+     const fullText = realtimeSession.lastResponse;
+     
+     // IMPROVED: Better text locking logic
+     if (fullText && currentText.length >= fullText.length && !textRevealCompleteRef.current) {
+       setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: fullText } : m)));
+       textRevealCompleteRef.current = true;
+       lastFullTextRef.current = fullText;
+       console.log('[Dashboard Agent] ✅ Text reveal complete - locked');
+       return;
+     }
+     
+     // If locked, don't update anymore
+     if (textRevealCompleteRef.current && fullText === lastFullTextRef.current) {
+       return;
+     }
+   }, [realtimeSession.visibleResponse, realtimeSession.lastResponse]);
+   ```
+
+3. **Enhanced Reveal Loop:**
+   ```typescript
+   revealTimerRef.current = window.setInterval(() => {
+     if (!isPlayingAudioRef.current || pausedRef.current || stoppedUntilNextResponseRef.current) {
+       lastRevealTsRef.current = performance.now();
+       return;
+     }
+     const now = performance.now();
+     const dt = (now - lastRevealTsRef.current) / 1000;
+     lastRevealTsRef.current = now;
+     const cps = charsPerSecondRef.current;
+     if (pendingTextRef.current.length > 0 && cps > 0) {
+       // IMPROVED: Better calculation for smoother sync
+       const take = Math.max(1, Math.floor(cps * dt));
+       const slice = pendingTextRef.current.slice(0, take);
+       pendingTextRef.current = pendingTextRef.current.slice(slice.length);
+       setVisibleResponse(prev => prev + slice);
+     }
+   }, 50);
+   ```
+
+4. **Clear Pending Text on Stop:**
+   ```typescript
+   const bargeIn = useCallback(() => {
+     // ... stop audio
+     // Stop reveal loop and clear text buffer
+     if (revealTimerRef.current) {
+       clearInterval(revealTimerRef.current);
+       revealTimerRef.current = null;
+     }
+     pendingTextRef.current = '';
+     setVisibleResponse(prev => prev); // Keep last shown
+   }, []);
+   ```
+
+**Files Modified:** 
+- `frontend/lib/useOpenAIRealtime.ts`
+- `frontend/components/voice/DashboardVoiceAgent.tsx`
+
+**Testing:**
+- Play voice response → verify text reveals smoothly
+- Check text doesn't finish before audio
+- Verify text stops when audio stops
+- No stuttering or jumping in text
+
+---
+
+### AI Not Updating with New Data
+
+**Error Message:** User asks "How many cards do I have?" after regenerating dashboard, but AI gives old count. AI doesn't know about new cards or content after user goes back to Step 4 and changes answers.
+
+**Root Cause:** AI session instructions are only sent once during initialization. When user:
+1. Goes back to Step 4
+2. Changes their answers
+3. Regenerates dashboard (creating new cards)
+
+The AI is never notified of these changes, so it continues to reference old data.
+
+**Solutions Applied:**
+
+1. **Added Dashboard Change Detection:**
+   ```typescript
+   // Track current state
+   const lastCardCountRef = useRef<number>(dashboardCards?.length || 0);
+   const dashboardContentHashRef = useRef<string>('');
+   
+   // Detect changes
+   useEffect(() => {
+     const currentCardCount = dashboardCards?.length || 0;
+     const currentContentHash = JSON.stringify(dashboardContent);
+     
+     const cardsChanged = currentCardCount !== lastCardCountRef.current;
+     const contentChanged = currentContentHash !== dashboardContentHashRef.current;
+     
+     if (cardsChanged || contentChanged) {
+       console.log('[Dashboard Agent] 🔄 Dashboard data changed!');
+       console.log('[Dashboard Agent] Previous:', lastCardCountRef.current, 'New:', currentCardCount);
+       
+       // Update stored values
+       lastCardCountRef.current = currentCardCount;
+       dashboardContentHashRef.current = currentContentHash;
+       
+       // Refresh AI context
+       const updatedInstructions = buildSessionInstructions();
+       realtimeSession.sendSessionUpdate({
+         modalities: ['text', 'audio'],
+         instructions: updatedInstructions,
+         voice: VOICE_AGENT_VOICE,
+         // ... config
+       });
+       
+       console.log('[Dashboard Agent] ✅ AI context updated with new data');
+     }
+   }, [dashboardCards, dashboardContent]);
+   ```
+
+2. **Dynamic Instruction Building:**
+   ```typescript
+   const buildSessionInstructions = useCallback(() => {
+     const cardSummary = dashboardCards && dashboardCards.length > 0 
+       ? `The user currently has ${dashboardCards.length} educational cards: ${dashboardCards.map(c => c.title).join(', ')}.`
+       : 'The user has no cards yet.';
+     
+     return `You are ${userSession?.full_name || 'the user'}'s intelligent Dashboard Assistant.
+     
+     CURRENT DASHBOARD STATE:
+     ${cardSummary}
+     
+     FLEXIBLE QUESTION UNDERSTANDING:
+     ✅ "how many cards do I have?" → Answer with current count (${dashboardCards?.length || 0})
+     ✅ Always use CURRENT card count and data
+     ✅ Stay updated - if user regenerated dashboard, use latest information
+     
+     ...rest of instructions...`;
+   }, [dashboardCards, userSession, selectedCard]);
+   ```
+
+3. **Monitor Multiple Change Triggers:**
+   ```typescript
+   // Watch for changes in multiple places:
+   useEffect(() => {
+     // Detect any of these changes:
+     // 1. Card count changed (user regenerated)
+     // 2. Card content changed (new content generated)
+     // 3. Selected card changed (user opened different card)
+     
+     if (isInitialized && realtimeSession.isConnected) {
+       // Auto-refresh AI context
+     }
+   }, [dashboardCards, dashboardContent, selectedCard, isInitialized]);
+   ```
+
+4. **Initial State Capture:**
+   ```typescript
+   // On initialization, capture starting state
+   setTimeout(() => {
+     if (realtimeSession.isConnected) {
+       const sessionConfig = { /* ... */ };
+       const success = realtimeSession.sendSessionUpdate(sessionConfig);
+       
+       if (success) {
+         // Store initial state for comparison
+         lastCardCountRef.current = dashboardCards?.length || 0;
+         dashboardContentHashRef.current = JSON.stringify(dashboardContent);
+       }
+     }
+   }, 100);
+   ```
+
+**Files Modified:** `frontend/components/voice/DashboardVoiceAgent.tsx`
+
+**Testing:**
+1. Ask "how many cards do I have?" → note answer
+2. Go back to Step 4 → change answers
+3. Regenerate dashboard (new card count)
+4. Ask "how many cards do I have?" again
+5. Verify AI reports NEW count, not old count
+6. Ask about specific card content
+7. Verify AI has access to NEW content
+
+---
+
+### Not Answering Latest Question
+
+**Error Message:** AI answers a previous question instead of the latest one, or ignores the latest question after being interrupted.
+
+**Root Cause:** When user interrupts a response (by stopping or asking new question), the `hasActiveResponseRef` flag remains `true`, blocking new responses. System thinks there's still an active response even though user stopped it.
+
+**Solutions Applied:**
+
+1. **Immediate Flag Reset on Interrupt:**
+   ```typescript
+   const bargeIn = useCallback(() => {
+     console.log('[BargeIn] Interrupting current response');
+     
+     // Stop audio/text
+     audioQueueRef.current = [];
+     isPlayingAudioRef.current = false;
+     // ...
+     
+     // CRITICAL: Immediately reset flag
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     
+     console.log('[BargeIn] ✅ Interrupted and reset active response flag');
+   }, []);
+   ```
+
+2. **Clear Before New Interactions:**
+   ```typescript
+   const handleTextSubmit = useCallback((e?: React.FormEvent) => {
+     // Interrupt any active response FIRST
+     const lastAssistant = [...messages].reverse()
+       .find(m => m.role === 'assistant' && ['processing', 'playing', 'paused'].includes(m.status));
+     
+     if (lastAssistant) {
+       realtimeSession.bargeIn(); // This resets the flag
+       realtimeSession.clearBuffers();
+       setMessages(prev => prev.map(m => 
+         m.id === lastAssistant.id ? { ...m, status: 'stopped' } : m
+       ));
+       activeAssistantIdRef.current = null;
+     }
+     
+     // Now safe to send new message
+     realtimeSession.sendText(messageToSend);
+   }, [messages, realtimeSession]);
+   ```
+
+3. **Improved Duplication Prevention:**
+   ```typescript
+   useEffect(() => {
+     const transcript = realtimeSession.currentTranscript?.trim();
+     if (!transcript) return;
+     
+     // CRITICAL: Prevent duplicates
+     if (transcript === lastVoiceTranscriptRef.current) {
+       return; // Already processed this transcript
+     }
+     
+     // Don't create voice messages if submitting text
+     if (submittingRef.current) {
+       return; // Text submission in progress
+     }
+     
+     // Process new voice transcript...
+     lastVoiceTranscriptRef.current = transcript;
+   }, [realtimeSession.currentTranscript]);
+   ```
+
+4. **Reset Transcript Tracker on New Mic Session:**
+   ```typescript
+   const toggleMic = () => {
+     if (!isInitialized) return;
+     
+     if (realtimeSession.isListening) {
+       // Stopping - prepare for response
+       realtimeSession.stopListening();
+     } else {
+       // Starting - clear previous state
+       realtimeSession.clearError();
+       
+       // Interrupt any active response
+       const lastAssistant = /* ... */;
+       if (lastAssistant) {
+         realtimeSession.bargeIn();
+       }
+       
+       realtimeSession.startListening();
+       
+       // CRITICAL: Reset voice transcript tracker
+       lastVoiceTranscriptRef.current = '';
+     }
+   };
+   ```
+
+**Files Modified:**
+- `frontend/lib/useOpenAIRealtime.ts` (bargeIn, clearBuffers)
+- `frontend/components/voice/DashboardVoiceAgent.tsx` (handleTextSubmit, toggleMic, transcript handling)
+
+**Testing:**
+1. Ask question A → wait for response
+2. Interrupt mid-response → ask question B
+3. Verify AI answers B, not A
+4. Ask with voice → stop → ask with text
+5. Verify no crossed responses
+6. Ask same question twice → verify no duplication
+
+---
+
+### Empty Error Messages
+
+**Error Message:** Console shows "Realtime API error details: {}" or blank error popup appears.
+
+**Root Cause:** WebSocket sometimes sends error messages with empty payloads. The error detection logic wasn't checking for empty errors early enough, so they were processed and displayed to users even though they contained no useful information.
+
+**Solutions Applied:**
+
+1. **Early Empty Error Detection:**
+   ```typescript
+   case 'error':
+     const errorDetails = message.error || message;
+     
+     // CRITICAL: Check if error is empty FIRST before any other processing
+     const isEmptyError = !errorDetails || 
+                         Object.keys(errorDetails).length === 0 ||
+                         (typeof errorDetails === 'object' && 
+                          errorDetails.error && 
+                          Object.keys(errorDetails.error).length === 0) ||
+                         (typeof errorDetails === 'object' && 
+                          !errorDetails.message && 
+                          !errorDetails.code &&
+                          !errorDetails.type);
+     
+     if (isEmptyError) {
+       console.warn('[Error] Empty error suppressed - no details provided');
+       hasActiveResponseRef.current = false;
+       setIsProcessing(false);
+       break; // Exit early - don't show error
+     }
+     
+     // Continue processing only if error has content...
+   ```
+
+2. **Multiple Empty Pattern Detection:**
+   ```typescript
+   // Detect various empty error formats:
+   // - Null/undefined error
+   // - Empty object {}
+   // - Object with empty nested error property
+   // - Object with no message, code, or type properties
+   ```
+
+3. **Enhanced Benign Error Filtering:**
+   ```typescript
+   const errorMessage = errorDetails?.message || 
+                       errorDetails?.code || 
+                       errorDetails?.type ||
+                       (typeof errorDetails === 'string' ? errorDetails : null) ||
+                       (Object.keys(errorDetails || {}).length > 0 ? JSON.stringify(errorDetails) : null) || 
+                       'Unknown API error';
+   
+   const lower = String(errorMessage || '').toLowerCase();
+   const isBenignCancel = lower.includes('cancellation failed') || 
+                         lower.includes('no active response') ||
+                         lower.includes('buffer too small') ||
+                         lower === 'unknown api error';
+   
+   if (isBenignCancel) {
+     console.warn('[Error] Benign error suppressed:', errorMessage);
+     hasActiveResponseRef.current = false;
+     setIsProcessing(false);
+     break; // Don't show to user
+   }
+   ```
+
+4. **Only Show Real Errors:**
+   ```typescript
+   // Only log and show real errors with actual content
+   console.error('[Error] Realtime API error:', errorMessage, 'Full details:', errorDetails);
+   setError(`Voice Coach error: ${errorMessage}`);
+   hasActiveResponseRef.current = false;
+   setIsProcessing(false);
+   ```
+
+**Files Modified:** `frontend/lib/useOpenAIRealtime.ts`
+
+**Result:**
+- Empty errors are logged to console for debugging
+- But not displayed to users (no popup, no UI error)
+- Users only see meaningful errors
+- Console remains clean for developers
+
+**Testing:**
+1. Use voice agent normally
+2. Open browser console (F12)
+3. Look for empty error patterns
+4. Verify no "{}" or empty errors show in UI
+5. Verify empty errors logged to console only
+6. Verify real errors still show properly
+
+---
+
 ## 🔄 Maintenance Notes
 
 ### When Adding New Features:
@@ -359,13 +879,16 @@ This document contains all the errors we've encountered during Voice Coach devel
 - [ ] Pause/resume functionality
 - [ ] Multiple consecutive questions
 - [ ] Error recovery scenarios
+- [ ] Dashboard regeneration and AI context update
+- [ ] Interrupt and ask new question
+- [ ] Empty error suppression
 
 ---
 
 ## 📝 Last Updated
 **Date:** January 2025  
-**Version:** 1.0  
-**Status:** Active Development
+**Version:** 2.0  
+**Status:** Production Ready ✅
 
 ---
 

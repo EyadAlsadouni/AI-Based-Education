@@ -62,11 +62,11 @@ export const useOpenAIRealtime = (): RealtimeSession => {
   const stoppedUntilNextResponseRef = useRef(false);
   const lastCancelAtRef = useRef<number>(0);
   const hasActiveResponseRef = useRef(false);
-  // Text streaming synchronization
+  // Text streaming synchronization - SLOWED DOWN for better sync
   const pendingTextRef = useRef('');
   const revealTimerRef = useRef<number | null>(null);
   const lastRevealTsRef = useRef<number>(0);
-  const charsPerSecondRef = useRef<number>(18); // conservative rate for readable sync
+  const charsPerSecondRef = useRef<number>(12); // REDUCED from 18 to 12 for smoother sync
   
   // Removed complex paused buffer tracking; we rely on AudioContext suspend/resume
 
@@ -132,9 +132,10 @@ export const useOpenAIRealtime = (): RealtimeSession => {
         playbackDrainedRef.current = false;
         setIsStreamComplete(false);
         setIsPlaybackDrained(false);
-        // Reset active response flag on new connection
+        // CRITICAL: Force reset active response flag on new connection
         hasActiveResponseRef.current = false;
         setIsProcessing(false);
+        console.log('[Connection] ✅ Active response flag reset');
         
         // Wait a bit before sending session configuration
         setTimeout(() => {
@@ -226,7 +227,7 @@ LANGUAGE:
       wsRef.current.onmessage = (event) => {
         try {
           const message: RealtimeMessage = JSON.parse(event.data);
-          console.log('Received WebSocket message:', message.type, message);
+          console.log('Received WebSocket message:', message.type);
           handleRealtimeMessage(message);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error, 'Raw data:', event.data);
@@ -303,18 +304,19 @@ LANGUAGE:
           break;
 
         case 'response.created':
+          console.log('[Response] Created - setting active flag');
           stoppedUntilNextResponseRef.current = false;
           hasActiveResponseRef.current = true;
           setIsProcessing(true);
           
-          // Add timeout to reset active response flag if it gets stuck
+          // CRITICAL: Add aggressive timeout to reset active response flag if it gets stuck
           setTimeout(() => {
             if (hasActiveResponseRef.current) {
-              console.log('Timeout: Force resetting active response flag');
+              console.log('[Timeout] ⏰ Force resetting active response flag after 25 seconds');
               hasActiveResponseRef.current = false;
               setIsProcessing(false);
             }
-          }, 30000); // 30 second timeout
+          }, 25000); // 25 second timeout (reduced from 30 for faster recovery)
           break;
 
         case 'response.audio.delta':
@@ -322,7 +324,6 @@ LANGUAGE:
           if (message.delta) {
             // If we've issued a stop and are waiting for the next response, ignore any stray deltas
             if (stoppedUntilNextResponseRef.current) {
-              // console.log('[delta] Ignored because stoppedUntilNextResponseRef is true');
               return;
             }
             // If user intentionally paused, do NOT auto-resume the context.
@@ -338,14 +339,14 @@ LANGUAGE:
           break;
 
         case 'response.audio.done': {
-          // Streaming finished. Do not mark finished until playback drains
+          console.log('[Response] Audio done - streaming complete');
           streamCompleteRef.current = true;
           setIsStreamComplete(true);
           break;
         }
 
         case 'response.completed': {
-          // Some stacks emit a single completed event
+          console.log('[Response] Completed - resetting active flag');
           streamCompleteRef.current = true;
           setIsStreamComplete(true);
           hasActiveResponseRef.current = false;
@@ -355,7 +356,7 @@ LANGUAGE:
 
         case 'response.done':
         case 'response.finished': {
-          // Response is completely finished
+          console.log('[Response] Done/Finished - resetting active flag');
           streamCompleteRef.current = true;
           setIsStreamComplete(true);
           hasActiveResponseRef.current = false;
@@ -436,19 +437,28 @@ LANGUAGE:
         case 'error':
           const errorDetails = message.error || message;
           
-          // Check if error is empty/benign FIRST
+          // CRITICAL: Check if error is empty/benign FIRST before any other processing
           const isEmptyError = !errorDetails || 
                               Object.keys(errorDetails).length === 0 ||
-                              (errorDetails.error && Object.keys(errorDetails.error).length === 0);
+                              (typeof errorDetails === 'object' && 
+                               errorDetails.error && 
+                               Object.keys(errorDetails.error).length === 0) ||
+                              (typeof errorDetails === 'object' && 
+                               !errorDetails.message && 
+                               !errorDetails.code &&
+                               !errorDetails.type);
           
           if (isEmptyError) {
-            console.warn('[Realtime] Empty error suppressed');
+            console.warn('[Error] Empty error suppressed - no details provided');
             hasActiveResponseRef.current = false;
+            setIsProcessing(false);
             break;
           }
           
           const errorMessage = errorDetails?.message || 
                               errorDetails?.code || 
+                              errorDetails?.type ||
+                              (typeof errorDetails === 'string' ? errorDetails : null) ||
                               (Object.keys(errorDetails || {}).length > 0 ? JSON.stringify(errorDetails) : null) || 
                               'Unknown API error';
           
@@ -457,28 +467,25 @@ LANGUAGE:
           const isBenignCancel = lower.includes('cancellation failed') || 
                                 lower.includes('no active response') ||
                                 lower.includes('buffer too small') ||
-                                lower === 'unknown api error' ||
-                                !errorDetails || 
-                                Object.keys(errorDetails || {}).length === 0;
+                                lower === 'unknown api error';
           
           if (isBenignCancel) {
-            console.warn('[Realtime] Benign error suppressed:', errorMessage);
+            console.warn('[Error] Benign error suppressed:', errorMessage);
             hasActiveResponseRef.current = false;
+            setIsProcessing(false);
             break;
           }
           
-          // Only log and show real errors - but don't show empty error details
-          if (errorDetails && Object.keys(errorDetails).length > 0) {
-            console.error('Realtime API error details:', errorDetails);
-            setError(`OpenAI Realtime API error: ${errorMessage}`);
-          } else {
-            console.warn('Realtime API error (empty details) - suppressing display');
-            // Don't set error for empty error details
-          }
+          // Only log and show real errors with actual content
+          console.error('[Error] Realtime API error:', errorMessage, 'Full details:', errorDetails);
+          setError(`Voice Coach error: ${errorMessage}`);
+          hasActiveResponseRef.current = false;
+          setIsProcessing(false);
           break;
 
         default:
-          console.log('Unhandled message type:', message.type);
+          // console.log('Unhandled message type:', message.type);
+          break;
       }
     } catch (error) {
       console.error('Error handling realtime message:', error);
@@ -529,8 +536,6 @@ LANGUAGE:
     const noActiveSource = !currentSourceRef.current;
     const streamComplete = streamCompleteRef.current;
     const isPaused = pausedRef.current;
-    
-    // console.log('[maybeMarkPlaybackDrained] Checking drain conditions:', { streamComplete, noQueue, noActiveSource, isPaused });
 
     // Only declare drained when:
     // - stream finished,
@@ -542,7 +547,7 @@ LANGUAGE:
       setIsPlaybackDrained(true);
       setIsProcessing(false);
       setIsPlaying(false);
-      // console.log('[maybeMarkPlaybackDrained] Marked as drained');
+      console.log('[Playback] ✅ Drained - response complete');
     }
   }, []);
 
@@ -550,7 +555,6 @@ LANGUAGE:
   const playNextAudioChunk = useCallback(() => {
     // If paused, do not consume the queue
     if (pausedRef.current || audioContextRef.current?.state === 'suspended') {
-      // console.log('[playNextAudioChunk] Skipping - paused or suspended');
       return;
     }
 
@@ -581,14 +585,11 @@ LANGUAGE:
     const startTime = audioContextRef.current.currentTime;
     
     source.onended = () => {
-      // console.log('[playNextAudioChunk] Buffer ended');
       // Only process the end if we're not paused
       if (!pausedRef.current) {
         currentSourceRef.current = null;
         maybeMarkPlaybackDrained();
         playNextAudioChunk();
-      } else {
-        // console.log('[playNextAudioChunk] Ended while paused - not processing');
       }
     };
 
@@ -611,6 +612,7 @@ LANGUAGE:
         lastRevealTsRef.current = now;
         const cps = charsPerSecondRef.current;
         if (pendingTextRef.current.length > 0 && cps > 0) {
+          // IMPROVED: Better text reveal calculation for smoother sync
           const take = Math.max(1, Math.floor(cps * dt));
           const slice = pendingTextRef.current.slice(0, take);
           pendingTextRef.current = pendingTextRef.current.slice(slice.length);
@@ -673,6 +675,7 @@ LANGUAGE:
 
   // Clear all buffers and reset state
   const clearBuffers = useCallback(() => {
+    console.log('[Clear] Clearing all buffers and state');
     // Clear audio buffers
     audioQueueRef.current = [];
     if (currentSourceRef.current) {
@@ -698,6 +701,7 @@ LANGUAGE:
     isPlayingAudioRef.current = false;
     setIsPlaying(false);
     setIsProcessing(false);
+    // CRITICAL: Force reset active response flag
     hasActiveResponseRef.current = false;
     
     // Clear reveal timer
@@ -708,6 +712,8 @@ LANGUAGE:
     
     // Clear error
     setError(null);
+    
+    console.log('[Clear] ✅ All buffers cleared, active response reset');
   }, []);
 
   // Start audio input using AudioWorklet with ScriptProcessorNode fallback
@@ -718,8 +724,12 @@ LANGUAGE:
         return;
       }
 
-      // Clear any previous buffers and reset state for new voice interaction
+      // CRITICAL: Force clear everything before starting new interaction
+      console.log('[Listening] Force clearing state before starting');
       clearBuffers();
+      // Extra safety: Force reset the active response flag
+      hasActiveResponseRef.current = false;
+      setIsProcessing(false);
 
       await initAudioContext();
       
@@ -751,8 +761,6 @@ LANGUAGE:
           accumulatedMs += 20;
           hasAudioFrame = true;
 
-          console.log(`Audio frame received: ${u8.byteLength} bytes, total ms: ${accumulatedMs}`);
-
           // Base64 encode without copying repeatedly
           let binary = '';
           const len = u8.byteLength;
@@ -768,7 +776,7 @@ LANGUAGE:
       src.connect(node);
       (processorRef as any).current = { node, src, disconnect: () => { node.disconnect(); src.disconnect(); } };
       useWorklet = true;
-      console.log('Using AudioWorklet for audio processing - MANUAL PUSH-TO-TALK MODE');
+      console.log('[Listening] Using AudioWorklet for audio processing');
         
       } catch (workletError) {
         console.warn('AudioWorklet failed, falling back to ScriptProcessorNode:', workletError);
@@ -785,8 +793,6 @@ LANGUAGE:
           const inputData = e.inputBuffer.getChannelData(0);
           accumulatedMs += (inputData.length / 16000) * 1000; // Convert samples to ms
           hasAudioFrame = true;
-
-          console.log(`ScriptProcessor frame: ${inputData.length} samples, total ms: ${accumulatedMs}`);
           
           // Convert Float32Array to PCM16
           const pcm16 = new Int16Array(inputData.length);
@@ -814,7 +820,7 @@ LANGUAGE:
         processor.connect(ctx.destination);
         (processorRef as any).current = { processor, src, disconnect: () => { processor.disconnect(); src.disconnect(); } };
         useWorklet = false;
-        console.log('Using ScriptProcessorNode for audio processing - MANUAL PUSH-TO-TALK MODE');
+        console.log('[Listening] Using ScriptProcessorNode for audio processing');
       }
 
       // Keep refs so we can stop later
@@ -851,28 +857,30 @@ LANGUAGE:
       const gotMs = (listeningMsRef as any).current ? (listeningMsRef as any).current() : 0;
       const hasFrame = (hasAudioFrameRef as any).current ? (hasAudioFrameRef as any).current() : false;
       
-      console.log(`Stopping listening: gotMs=${gotMs}, hasFrame=${hasFrame}`);
+      console.log(`[Listening] Stopping: gotMs=${gotMs}, hasFrame=${hasFrame}`);
       
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         // More lenient threshold - allow any audio > 0ms
         if (gotMs > 0) {
-          console.log('Committing audio buffer...');
+          console.log('[Listening] Committing audio buffer...');
           wsRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
           
-          // Check if there's already an active response before creating a new one
+          // CRITICAL: Check if there's already an active response before creating a new one
           if (!hasActiveResponseRef.current) {
-            console.log('Creating new response...');
+            console.log('[Listening] Creating new response...');
             wsRef.current.send(JSON.stringify({
               type: 'response.create',
               response: { modalities: ['audio', 'text'] }
             }));
+            // Mark as having active response IMMEDIATELY after sending
+            hasActiveResponseRef.current = true;
+            setIsProcessing(true);
           } else {
-            console.log('Skipping response.create - already have active response');
+            console.log('[Listening] ⚠️ Skipping response.create - already have active response');
           }
         } else {
           // we didn't get any audio — don't commit empty buffer
-          console.warn('Skip commit: no audio recorded (0ms)');
-          // Don't show error for empty audio - this is normal user behavior
+          console.warn('[Listening] Skip commit: no audio recorded (0ms)');
         }
       }
     } finally {
@@ -882,28 +890,23 @@ LANGUAGE:
 
   // Send text input
   const sendText = useCallback((text: string) => {
-    console.log('[useOpenAIRealtime] sendText called:', text.substring(0, 50) + '...');
-    console.log('[useOpenAIRealtime] WebSocket state:', wsRef.current?.readyState, 'hasActiveResponse:', hasActiveResponseRef.current);
+    console.log('[SendText] Called with text:', text.substring(0, 50) + '...');
+    console.log('[SendText] WebSocket state:', wsRef.current?.readyState, 'hasActiveResponse:', hasActiveResponseRef.current);
     
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket not connected, cannot send text');
+      console.warn('[SendText] WebSocket not connected');
       setError('Not connected to Voice Coach');
       return;
     }
 
-    // Check if there's already an active response - but be more lenient for first message
-    if (hasActiveResponseRef.current) {
-      console.log('Skipping text send - already have active response, but clearing it first');
-      // Clear the active response flag to allow new messages
-      hasActiveResponseRef.current = false;
-      setIsProcessing(false);
-      setIsPlaying(false);
-    }
+    // CRITICAL: Force clear state before sending text to prevent stuck responses
+    console.log('[SendText] Force clearing state before sending');
+    clearBuffers();
+    // Extra safety: Force reset the active response flag
+    hasActiveResponseRef.current = false;
+    setIsProcessing(false);
 
     try {
-      // Clear all buffers and reset state for new conversation
-      clearBuffers();
-      
       wsRef.current.send(JSON.stringify({
         type: 'conversation.item.create',
         item: {
@@ -918,26 +921,29 @@ LANGUAGE:
         }
       }));
 
-      // Check if there's already an active response before creating a new one
-      if (!hasActiveResponseRef.current) {
-        wsRef.current.send(JSON.stringify({
-          type: 'response.create'
-        }));
-      } else {
-        console.log('Skipping response.create in sendText - already have active response');
-      }
+      // CRITICAL: Always create response after adding user message
+      console.log('[SendText] Creating response...');
+      wsRef.current.send(JSON.stringify({
+        type: 'response.create'
+      }));
+      
+      // Mark as having active response IMMEDIATELY after sending
+      hasActiveResponseRef.current = true;
+      setIsProcessing(true);
 
       setCurrentTranscript(text);
-      setIsProcessing(true);
     } catch (error) {
-      console.error('Error sending text:', error);
+      console.error('[SendText] Error:', error);
       setError('Failed to send message');
+      hasActiveResponseRef.current = false;
+      setIsProcessing(false);
     }
   }, [clearBuffers]);
 
   // Barge-in (interrupt current playback)
   const bargeIn = useCallback(() => {
     try {
+      console.log('[BargeIn] Interrupting current response');
       // Stop current audio playback
       audioQueueRef.current = [];
       isPlayingAudioRef.current = false;
@@ -946,7 +952,7 @@ LANGUAGE:
         currentSourceRef.current = null;
       }
       setIsPlaying(false);
-      setIsPausedByUser(false); // Reset pause state when stopping
+      setIsPausedByUser(false);
       isPausedByUserRef.current = false;
       pausedRef.current = false;
       // Stop reveal loop and clear text buffer
@@ -964,9 +970,10 @@ LANGUAGE:
         // Only send cancel if we believe a response is active
         if (hasActiveResponseRef.current) {
           try {
+            console.log('[BargeIn] Sending response.cancel');
             wsRef.current.send(JSON.stringify({ type: 'response.cancel' }));
           } catch (sendErr) {
-            console.error('[bargeIn] response.cancel send failed:', sendErr);
+            console.error('[BargeIn] response.cancel send failed:', sendErr);
           }
         }
         // Regardless, mark no active response to avoid repeated cancels
@@ -974,34 +981,32 @@ LANGUAGE:
       }
 
       setIsProcessing(false);
+      console.log('[BargeIn] ✅ Interrupted and reset active response flag');
     } catch (error) {
-      console.error('Error during barge-in:', error);
+      console.error('[BargeIn] Error:', error);
       setIsProcessing(false);
       setIsPlaying(false);
+      hasActiveResponseRef.current = false;
     }
   }, []);
 
   const pauseOutput = useCallback(() => {
-    // console.log('[pauseOutput] Starting pause');
     if (audioContextRef.current?.state === 'running') {
       pausedRef.current = true;
       audioContextRef.current.suspend();
       setIsPlaying(false);
       setIsPausedByUser(true);
       isPausedByUserRef.current = true;
-      // console.log('[pauseOutput] Pause complete');
     }
   }, []);
 
   const resumeOutput = useCallback(() => {
-    // console.log('[resumeOutput] Starting resume');
     if (audioContextRef.current?.state === 'suspended') {
       pausedRef.current = false;
       isPausedByUserRef.current = false;
       setIsPausedByUser(false);
       
       audioContextRef.current.resume().then(() => {
-        // console.log('[resumeOutput] Context resumed, checking for audio to play');
         // Only start consuming the queue if nothing is currently playing
         if (!currentSourceRef.current && audioQueueRef.current.length > 0) {
           playNextAudioChunk();
@@ -1059,12 +1064,14 @@ LANGUAGE:
   // Send custom session update
   const sendSessionUpdate = useCallback((sessionConfig: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('[SessionUpdate] Sending update to session');
       wsRef.current.send(JSON.stringify({
         type: 'session.update',
         session: sessionConfig
       }));
       return true;
     }
+    console.warn('[SessionUpdate] Cannot send - WebSocket not open');
     return false;
   }, []);
 

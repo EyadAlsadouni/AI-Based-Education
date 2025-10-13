@@ -62,6 +62,40 @@ const generateDynamicCardPrompt = (card, userData) => {
   const mainInterests = userData.main_interests ? userData.main_interests.join(', ') : '';
   const mainGoals = userData.main_goal ? userData.main_goal.join(', ') : '';
   
+  // Special handling for "Your Question" card
+  if (card.contentKey === 'user_question' && card.userQuestion) {
+    return `The user asked a specific question about their condition. Answer it directly and thoroughly.
+
+User's Question: "${card.userQuestion}"
+
+User Context:
+- Condition: ${condition}
+- Age: ${userData.age || 'Not specified'}
+- Gender: ${userData.gender || 'Not specified'}
+- Knowledge Level: ${userData.knowledge_level || 'new'}
+- Main Goals: ${mainGoals}
+
+IMPORTANT INSTRUCTIONS:
+1. Answer their EXACT question directly and clearly
+2. Provide a focused, educational answer (not medical advice)
+3. Keep the answer concise (3-4 paragraphs maximum)
+4. Use simple, clear language appropriate for their knowledge level
+5. If the question asks about specific numbers/amounts (like "how much sleep"), give clear guidance
+6. Include 2-3 credible references from reputable health sources
+7. Format with **bold** for key points
+
+Example structure:
+**Direct Answer:** [Answer their question in 1-2 sentences]
+
+**Key Information:** [Provide 2-3 key points that fully answer the question]
+
+**Additional Context:** [Any important related information they should know]
+
+References:
+[1] Source name. "Article title." URL
+[2] Source name. "Article title." URL`;
+  }
+  
   let basePrompt = `Generate educational content for: ${card.title}
   
 Description: ${card.description}

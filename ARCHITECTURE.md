@@ -16,7 +16,6 @@ graph TB
                 Step3Page[Step 3: Knowledge Assessment<br/>app/step-3/page.tsx]
                 Step4Page[Step 4: Goals & Preferences<br/>app/step-4/page.tsx]
                 DashboardPage[Dashboard<br/>app/dashboard/page.tsx]
-                VoiceCoachPage[Voice Coach<br/>app/voice-coach/page.tsx]
             end
             
             subgraph "UI Components"
@@ -24,9 +23,8 @@ graph TB
                 Step2Comp[Step2.tsx<br/>Condition grid]
                 Step3Comp[Step3.tsx<br/>Assessment form]
                 Step4Comp[Step4.tsx<br/>Goals form]
-                DashboardComp[Dashboard.tsx<br/>Dynamic cards]
-                VoiceCoachComp[VoiceCoachInterface.tsx<br/>Push-to-talk UI]
-                DashboardVoiceAgent[DashboardVoiceAgent.tsx<br/>FAB + Pop-up Voice Agent]
+                DashboardComp[Dashboard.tsx<br/>Dynamic cards + PDF export]
+                DashboardVoiceAgent[DashboardVoiceAgent.tsx<br/>FAB Pop-up Voice Agent]
                 AvatarLoop[AvatarLoop.tsx<br/>Animated avatar]
                 BoldTextRenderer[BoldTextRenderer.tsx<br/>Formatted text]
             end
@@ -34,9 +32,8 @@ graph TB
             subgraph "Business Logic Libraries"
                 API[api.ts<br/>API client Axios]
                 AudioManager[useAudioManager.ts<br/>Audio singleton]
-                VoiceWebSocket[useVoiceWebSocket.ts<br/>WebSocket hook]
                 OpenAIRealtime[useOpenAIRealtime.ts<br/>Realtime API hook]
-                DashboardCards[dashboardCards.ts<br/>Dynamic card generator]
+                Constants[constants.ts<br/>Dynamic card generator]
                 Utils[utils.ts<br/>Helper functions]
             end
             
@@ -115,8 +112,6 @@ graph TB
     Step4Page -->|Complete| DashboardPage
     DashboardPage -->|Uses| DashboardComp
     DashboardPage -->|Opens| DashboardVoiceAgent
-    DashboardPage -->|Navigate to| VoiceCoachPage
-    VoiceCoachPage -->|Uses| VoiceCoachComp
     
     %% Component Dependencies
     Step1Comp -->|Saves to| LocalStorage
@@ -124,14 +119,12 @@ graph TB
     Step3Comp -->|Saves to| LocalStorage
     Step4Comp -->|Saves to| LocalStorage
     DashboardComp -->|Loads from| LocalStorage
-    DashboardComp -->|Uses| DashboardCards
+    DashboardComp -->|Uses| Constants
     DashboardComp -->|Plays audio| AudioManager
     DashboardComp -->|Voice Agent| DashboardVoiceAgent
-    VoiceCoachComp -->|Uses| OpenAIRealtime
-    VoiceCoachComp -->|Uses| AvatarLoop
-    VoiceCoachComp -->|Uses| BoldTextRenderer
     DashboardVoiceAgent -->|Uses| OpenAIRealtime
-    DashboardVoiceAgent -->|Uses| AudioManager
+    DashboardVoiceAgent -->|Uses| AvatarLoop
+    DashboardVoiceAgent -->|Uses| BoldTextRenderer
     
     %% API Communication
     Step1Comp -->|POST| API
@@ -144,13 +137,11 @@ graph TB
     API -->|HTTP REST| VoiceRoutes
     
     %% WebSocket Communication
-    VoiceCoachComp -->|WebSocket| VoiceWebSocket
-    DashboardVoiceAgent -->|WebSocket| VoiceWebSocket
-    VoiceWebSocket -.->|wss://| WSS
-    OpenAIRealtime -->|Uses| VoiceWebSocket
+    DashboardVoiceAgent -->|WebSocket| OpenAIRealtime
+    OpenAIRealtime -.->|wss://| WSS
     
     %% Voice Processing Flow
-    VoiceCoachComp -->|Captures| MediaDevices
+    DashboardVoiceAgent -->|Captures| MediaDevices
     MediaDevices -->|Audio Stream| AudioWorklet
     AudioWorklet -->|PCM16| OpenAIRealtime
     OpenAIRealtime -->|Processes| WebAudioAPI
@@ -200,7 +191,7 @@ graph TB
     classDef external fill:#8b5cf6,stroke:#6d28d9,stroke-width:2px,color:#fff
     classDef browser fill:#ec4899,stroke:#be185d,stroke-width:2px,color:#fff
     
-    class Step1Page,Step2Page,Step3Page,Step4Page,DashboardPage,VoiceCoachPage,Step1Comp,Step2Comp,Step3Comp,Step4Comp,DashboardComp,VoiceCoachComp,DashboardVoiceAgent,AvatarLoop,BoldTextRenderer,API,AudioManager,VoiceWebSocket,OpenAIRealtime,DashboardCards,Utils,LocalStorage,ReactState frontend
+    class Step1Page,Step2Page,Step3Page,Step4Page,DashboardPage,Step1Comp,Step2Comp,Step3Comp,Step4Comp,DashboardComp,DashboardVoiceAgent,AvatarLoop,BoldTextRenderer,API,AudioManager,OpenAIRealtime,Constants,Utils,LocalStorage,ReactState frontend
     class ServerJS,UserRoutes,ConditionRoutes,MedicationRoutes,AIRoutes,VoiceRoutes,OpenAIRealtimeService,WSS backend
     class DB,UsersTable,SessionsTable,ConditionsTable,MedicationsTable,VoiceSessionsTable,VoiceTurnsTable,TTSCacheTable,MiniKBTable,DashboardContentTable database
     class OpenAI,GPT4,RealtimeAPI,TTSAPI external
@@ -237,36 +228,48 @@ sequenceDiagram
     Frontend->>LocalStorage: Save answers
     
     User->>Frontend: Navigate to Step 4
-    User->>Frontend: Set goals + preferences
+    User->>Frontend: Set goals + preferences + optional question
     Frontend->>LocalStorage: Save preferences
     Frontend->>Backend: POST /api/users (create session)
     Backend->>Database: INSERT user + session
     Database-->>Backend: Session ID
     Backend-->>Frontend: Session created
     
-    User->>Frontend: Navigate to Dashboard
+    User->>Frontend: Click "Create Dashboard"
+    Frontend->>Frontend: Generate dynamic cards
+    Note over Frontend: generateDashboardCards()<br/>Based on: goals, interests,<br/>knowledge level, question
+    Frontend->>Backend: POST /api/ai/generate-dashboard<br/>with dynamic cards
+    Backend->>OpenAI: GPT-4o API calls<br/>(parallel for each card)
+    OpenAI-->>Backend: Personalized content
+    Backend->>Database: Save dashboard content
+    Backend-->>Frontend: Content ready
+    Frontend->>Frontend: Navigate to Dashboard
     Frontend->>LocalStorage: Load all step data
     Frontend->>Backend: GET /api/users/:id/session
     Backend->>Database: Query session
     Database-->>Backend: Session data
     Backend-->>Frontend: User session
     
-    Frontend->>Frontend: Generate dynamic cards
-    Note over Frontend: dashboardCards.ts<br/>analyzes user context<br/>selects 2-5 relevant cards
+    Frontend->>Backend: GET /api/ai/dashboard/:id
+    Backend->>Database: Query cached content
+    Database-->>Backend: Dashboard content
+    Backend-->>Frontend: Cached content
+    Frontend->>Frontend: Display personalized cards
     
-    User->>Frontend: Click "Generate Content"
-    Frontend->>Backend: POST /api/ai/generate-dashboard
-    Backend->>OpenAI: GPT-4 API call<br/>(25+ card-specific prompts)
-    OpenAI-->>Backend: Personalized content + references
-    Backend->>Database: UPDATE session with ai_response
-    Backend-->>Frontend: Dashboard content
-    Frontend->>Frontend: Display cards
+    alt User clicks "Regenerate Content"
+        Frontend->>Frontend: Generate dynamic cards again
+        Frontend->>Backend: POST /api/ai/generate-dashboard<br/>with dynamic cards
+        Backend->>OpenAI: GPT-4o parallel calls
+        OpenAI-->>Backend: Regenerated content
+        Backend->>Database: UPDATE session
+        Backend-->>Frontend: Fresh content
+    end
     
     User->>Frontend: Click card to read
     Frontend->>Frontend: Show expanded content
 ```
 
-### 2. Voice Coach Interaction Flow (Push-to-Talk)
+### 2. Dashboard Voice Agent Interaction Flow (Push-to-Talk)
 
 ```mermaid
 sequenceDiagram
@@ -277,12 +280,16 @@ sequenceDiagram
     participant Backend
     participant OpenAI
     
-    User->>Frontend: Navigate to Voice Coach
+    User->>Frontend: Click Voice Agent FAB (floating button)
+    Frontend->>Frontend: Open pop-up window
     Frontend->>Frontend: Initialize OpenAI Realtime hook
-    Frontend->>Backend: Connect WebSocket
+    Frontend->>Backend: POST /api/voice/session (dashboard type)
+    Backend->>Database: Create voice session
+    Frontend->>Backend: Connect WebSocket with dashboard context
     Backend->>OpenAI: Create ephemeral session
     OpenAI-->>Backend: Session token
     Backend-->>Frontend: Connection established
+    Backend->>Frontend: Inject dashboard context<br/>(cards, user profile, goals)
     
     User->>Frontend: Click mic button (start)
     Frontend->>Browser: Request microphone
@@ -315,97 +322,58 @@ sequenceDiagram
     Backend-->>Frontend: Message complete
     Frontend->>Frontend: Display transcript in chat
     Frontend->>Frontend: Show assistant message
-```
-
-### 3. Dashboard Voice Agent Pop-up Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant DashboardPage
-    participant VoiceAgent
-    participant WebSocket
-    participant Backend
-    participant OpenAI
     
-    User->>DashboardPage: View dashboard cards
-    DashboardPage->>VoiceAgent: Render FAB (floating button)
-    
-    User->>VoiceAgent: Click FAB
-    VoiceAgent->>VoiceAgent: Open pop-up window (600x600)
-    VoiceAgent->>Backend: Connect WebSocket
-    Backend->>OpenAI: Create session with topic filter
-    Note over Backend,OpenAI: Context: user's condition,<br/>health goal, dashboard cards
-    
-    User->>VoiceAgent: Click suggestion chip
-    VoiceAgent->>VoiceAgent: Prefill input field
-    User->>VoiceAgent: Click send button
-    
-    VoiceAgent->>WebSocket: Send text message
-    Backend->>OpenAI: Process with topic filter
-    Note over OpenAI: Only answers dashboard-related<br/>questions + small talk.<br/>Redirects unrelated topics.
-    
-    OpenAI-->>Backend: Response text
-    Backend-->>VoiceAgent: Display response
-    VoiceAgent->>VoiceAgent: Add to chat transcript
-    
-    alt Voice Response
-        VoiceAgent->>Backend: Request TTS
-        Backend->>OpenAI: Generate audio
-        OpenAI-->>Backend: Audio file
-        Backend-->>VoiceAgent: Audio URL
-        VoiceAgent->>AudioManager: Play audio
+    alt Text Input
+        User->>Frontend: Type question + click send
+        Frontend->>WebSocket: Send text message
+        Backend->>Backend: Inject dashboard context
+        Backend->>OpenAI: Process with full card content
+        OpenAI-->>Backend: Response text + audio
+        Backend-->>Frontend: Stream response
+        Frontend->>Frontend: Display text
+        Frontend->>WebAudioAPI: Play audio
     end
     
-    User->>VoiceAgent: Click mic button (push-to-talk)
-    Note over User,OpenAI: Same flow as Voice Coach<br/>but with topic filtering
-    
-    User->>VoiceAgent: Click close button
-    VoiceAgent->>Backend: Disconnect WebSocket
-    VoiceAgent->>VoiceAgent: Close pop-up
+    User->>Frontend: Click close button
+    Frontend->>Backend: Disconnect WebSocket
+    Frontend->>Frontend: Close pop-up
 ```
 
-### 4. Dynamic Dashboard Content Generation Flow
+### 3. Dynamic Dashboard Content Generation Flow
 
 ```mermaid
 flowchart TB
-    Start([User Completes Step 4]) --> LoadSession[Load User Session Data]
+    Start([User Clicks Create Dashboard]) --> LoadSession[Load User Session Data]
     
     LoadSession --> Analyze[Analyze User Context]
     
-    subgraph "Context Analysis - dashboardCards.ts"
-        Analyze --> CheckGoal{Health Goal?}
-        CheckGoal -->|Medication| MedCards[7 Medication Card Types]
-        CheckGoal -->|Procedure| ProcCards[5 Procedure Card Types]
-        CheckGoal -->|Mental Health| MentalCards[8 Mental Health Card Types]
-        CheckGoal -->|Education| EduCards[7 Education Card Types]
+    subgraph "Context Analysis - constants.ts"
+        Analyze --> CheckQuestion{Has Question?}
+        CheckQuestion -->|Yes| CreateQuestionCard[Create "Your Question" Card<br/>Priority 0]
+        CheckQuestion -->|No| CheckCondition
         
-        MedCards --> CheckInterests{User Interests?}
-        ProcCards --> CheckInterests
-        MentalCards --> CheckInterests
-        EduCards --> CheckInterests
+        CreateQuestionCard --> CheckCondition{Condition Type?}
+        CheckCondition -->|Medication| MedCards[Medication Card Templates]
+        CheckCondition -->|Procedure| ProcCards[Procedure Card Templates]
+        CheckCondition -->|Mental Health| MentalCards[Mental Health Card Templates]
+        CheckCondition -->|Education| EduCards[Education Card Templates]
         
-        CheckInterests -->|Technique| AddTechCard[Add Technique Card - Priority 1]
-        CheckInterests -->|Safety| AddSafetyCard[Add Safety Card - Priority 2]
-        CheckInterests -->|Monitoring| AddMonitorCard[Add Monitoring Card - Priority 3]
-        CheckInterests -->|Daily Plan| AddPlanCard[Add Daily Plan Card - Priority 4]
+        MedCards --> FilterKnown{Filter Step 3<br/>Already Known}
+        ProcCards --> FilterKnown
+        MentalCards --> FilterKnown
+        EduCards --> FilterKnown
         
-        AddTechCard --> CheckStyle{Learning Style?}
-        AddSafetyCard --> CheckStyle
-        AddMonitorCard --> CheckStyle
-        AddPlanCard --> CheckStyle
+        FilterKnown -->|Exclude| RemoveCards[Remove Known Topics]
+        RemoveCards --> MatchGoals{Match Step 4<br/>Goals}
         
-        CheckStyle -->|Videos| VideoCards[Cards with YouTube links]
-        CheckStyle -->|Step-by-step| DetailedCards[Detailed instructions]
-        CheckStyle -->|Quick tips| ConciseCards[Concise info]
+        MatchGoals -->|Include| AddGoalCards[Add Goal-Related Cards]
+        AddGoalCards --> AddPriority[Add High-Priority Cards]
         
-        VideoCards --> LimitCards[Limit to 5 cards max]
-        DetailedCards --> LimitCards
-        ConciseCards --> LimitCards
+        AddPriority --> SmartLimit[Smart Card Limiting<br/>Based on goal count]
+        SmartLimit --> SortPriority[Sort by Priority]
     end
     
-    LimitCards --> SortPriority[Sort by Priority 1-5]
-    SortPriority --> GenerateList[Generate Dynamic Card List]
+    SortPriority --> GenerateList[Generate Dynamic Card List<br/>2-6 cards]
     
     GenerateList --> SendToBackend[Send to Backend with User Context]
     
@@ -419,13 +387,13 @@ flowchart TB
         Loop -->|Card 4| Prompt4[Generate Prompt<br/>Include context + learning style]
         Loop -->|Card 5| Prompt5[Generate Prompt<br/>Include context + learning style]
         
-        Prompt1 --> CallGPT4[Call GPT-4 API]
-        Prompt2 --> CallGPT4
-        Prompt3 --> CallGPT4
-        Prompt4 --> CallGPT4
-        Prompt5 --> CallGPT4
+        Prompt1 --> CallGPT4o[Call GPT-4o API<br/>Parallel Execution]
+        Prompt2 --> CallGPT4o
+        Prompt3 --> CallGPT4o
+        Prompt4 --> CallGPT4o
+        Prompt5 --> CallGPT4o
         
-        CallGPT4 --> ParseContent[Parse Content + References]
+        CallGPT4o --> ParseContent[Parse Content + References]
         ParseContent --> BuildResponse[Build Dashboard Object]
     end
     
@@ -438,7 +406,7 @@ flowchart TB
     style Start fill:#3b82f6,stroke:#1e40af,color:#fff
     style End fill:#10b981,stroke:#047857,color:#fff
     style Analyze fill:#f59e0b,stroke:#d97706,color:#fff
-    style CallGPT4 fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style CallGPT4o fill:#8b5cf6,stroke:#6d28d9,color:#fff
     style SaveDB fill:#f59e0b,stroke:#d97706,color:#fff
 ```
 
@@ -472,6 +440,8 @@ graph LR
         WebAudio[Web Audio API]
         AudioWorkletNode[AudioWorklet]
         MediaStream[MediaStream API]
+        jsPDF[jsPDF - PDF Generation]
+        html2canvas[html2canvas - PDF Rendering]
     end
     
     subgraph "Development Tools"
@@ -708,8 +678,7 @@ stateDiagram-v2
         DisplayCards --> PDFExport
     }
     
-    Dashboard --> VoiceCoach: Navigate
-    Dashboard --> [*]: Logout
+    Dashboard --> [*]: Logout/Start Over
 ```
 
 ### Voice System Architecture
@@ -717,8 +686,7 @@ stateDiagram-v2
 ```mermaid
 graph TB
     subgraph "Voice Features"
-        VoiceCoach[Voice Coach Page<br/>Push-to-Talk]
-        DashboardVoice[Dashboard Voice Agent<br/>FAB Pop-up]
+        DashboardVoice[Dashboard Voice Agent<br/>FAB Pop-up with Tooltip]
         CardVoice[Dashboard Card Reading<br/>TTS Playback]
     end
     
@@ -737,10 +705,10 @@ graph TB
     subgraph "Backend Voice Services"
         VoiceRouteHandler[Voice Route Handler]
         RealtimeProxy[Realtime API Proxy]
+        ContextInjection[Context Injection<br/>Dashboard data auto-injected]
         TTSCache[TTS Cache System]
     end
     
-    VoiceCoach --> OpenAIRealtime
     DashboardVoice --> OpenAIRealtime
     CardVoice --> AudioManager
     
@@ -753,12 +721,13 @@ graph TB
     
     WebSocketConnection --> VoiceRouteHandler
     VoiceRouteHandler --> RealtimeProxy
+    VoiceRouteHandler --> ContextInjection
     VoiceRouteHandler --> TTSCache
     
-    style VoiceCoach fill:#3b82f6,stroke:#1e40af,color:#fff
     style DashboardVoice fill:#3b82f6,stroke:#1e40af,color:#fff
     style CardVoice fill:#3b82f6,stroke:#1e40af,color:#fff
     style RealtimeProxy fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style ContextInjection fill:#10b981,stroke:#047857,color:#fff
 ```
 
 ## Security & Performance
@@ -774,9 +743,11 @@ graph TB
     
     subgraph "Performance Optimizations"
         TTSCaching[TTS Audio Caching<br/>Reduce API calls]
+        DashboardCaching[Dashboard Content Caching<br/>Load from DB]
         LocalStorage[localStorage Persistence<br/>Form data]
         AudioSingleton[Audio Manager Singleton<br/>Prevent overlaps]
-        DynamicCards[Dynamic Card Generation<br/>2-5 cards only]
+        DynamicCards[Smart Card Generation<br/>2-6 cards based on selections]
+        ParallelAI[Parallel AI Generation<br/>All cards at once]
     end
     
     subgraph "Error Handling"
@@ -790,9 +761,11 @@ graph TB
     APIKeyAuth --> InputValidation
     InputValidation --> MedicalSafety
     
-    TTSCaching --> LocalStorage
+    TTSCaching --> DashboardCaching
+    DashboardCaching --> LocalStorage
     LocalStorage --> AudioSingleton
     AudioSingleton --> DynamicCards
+    DynamicCards --> ParallelAI
     
     FrontendErrors --> BackendErrors
     BackendErrors --> Fallbacks
@@ -808,15 +781,41 @@ graph TB
 
 This architecture diagram illustrates:
 
-1. **Frontend Layer**: Next.js pages, React components, custom hooks, and state management
-2. **Backend Layer**: Express API routes, WebSocket server, and business services
+1. **Frontend Layer**: Next.js 15 pages, React 19 components, custom hooks, and state management
+2. **Backend Layer**: Express 5 API routes, WebSocket server, and business services
 3. **Database Layer**: SQLite with 9 tables for comprehensive data storage
-4. **External Services**: OpenAI GPT-4, Realtime API, and TTS integration
+4. **External Services**: OpenAI GPT-4o, Realtime API, and TTS integration
 5. **Data Flow**: Complete user journey from assessment to personalized dashboard
-6. **Voice System**: Push-to-talk voice coach and dashboard voice agent
-7. **Security & Performance**: Caching, validation, error handling, and medical safety
+6. **Voice System**: Dashboard voice agent with push-to-talk and text input
+7. **Security & Performance**: Multi-layer caching, validation, error handling, and medical safety
+8. **Dynamic Content**: Smart card generation based on user goals, knowledge gaps, and optional questions
 
-The system uses a modern stack with React 19, Next.js 15, Express 5, and OpenAI's latest APIs to deliver personalized health education with voice interaction capabilities.
+### Key Features:
+
+- **Smart Card Generation**: 2-6 cards dynamically selected based on:
+  - What user wants to learn (Step 4 goals)
+  - What user already knows (Step 3 interests) - excluded
+  - User's specific question (if provided) - shown first
+  - Smart limiting based on selection count
+
+- **Dashboard Voice Agent**: Context-aware AI assistant that:
+  - Understands which card is currently open
+  - Has access to full card content
+  - Answers health-related questions
+  - Supports both text and voice input
+  - Shows "Ask AI Assistant" tooltip on hover
+
+- **Performance Optimizations**:
+  - Dashboard content cached in database
+  - Content generated once in Step 4, loaded from cache on dashboard
+  - Parallel AI generation for all cards
+  - TTS audio caching for card reading
+  - Smart card limiting prevents overwhelming users
+
+The system uses a modern stack with React 19, Next.js 15, Express 5, and OpenAI's GPT-4o and Realtime APIs to deliver personalized health education with intelligent voice interaction capabilities.
+
+
+
 
 
 

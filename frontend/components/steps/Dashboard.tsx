@@ -523,7 +523,8 @@ export const DashboardComponent: React.FC = () => {
               (session as any).knowledge_level || 'new',
               mainInterests,
               mainGoals,
-              (session as any).learning_style
+              (session as any).learning_style,
+              (session as any).main_question
             );
             console.log('Dashboard - Generated cards:', generatedCards.length);
             setDynamicCards(generatedCards);

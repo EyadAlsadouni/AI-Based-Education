@@ -6,7 +6,7 @@ import { Button } from '../ui/Button';
 import { Select, Textarea } from '../ui/FormElements';
 import { conditionsApi, userApi, aiApi, handleApiError } from '../../lib/api';
 import { formStorage, format, error as errorUtils } from '../../lib/utils';
-import { DEFAULT_CONDITION_GOALS, generateDynamicGoals } from '../../lib/constants';
+import { DEFAULT_CONDITION_GOALS, generateDynamicGoals, generateDashboardCards } from '../../lib/constants';
 import { Step4FormData, UserSession } from '../../types';
 
 export const Step4Component: React.FC = () => {
@@ -232,8 +232,33 @@ export const Step4Component: React.FC = () => {
       setLoading(false);
       setGeneratingDashboard(true);
       
-      // Generate AI dashboard content
-      await aiApi.generateDashboard(userId);
+      // Generate dynamic cards based on user session
+      console.log('[Step 4] Generating dynamic cards for dashboard...');
+      const sessionData = await userApi.getSession(userId);
+      const healthGoals = Array.isArray(sessionData.health_goals) 
+        ? sessionData.health_goals 
+        : (sessionData.health_goals ? (sessionData.health_goals as string).split(',') : []);
+      const mainInterests = Array.isArray((sessionData as any).main_interests) 
+        ? (sessionData as any).main_interests 
+        : ((sessionData as any).main_interests ? ((sessionData as any).main_interests as string).split(',') : []);
+      const mainGoals = Array.isArray(formData.main_goal) 
+        ? formData.main_goal 
+        : (formData.main_goal ? (formData.main_goal as string).split(',') : []);
+      
+      const dynamicCards = generateDashboardCards(
+        sessionData.condition_selected,
+        healthGoals,
+        (sessionData as any).knowledge_level || 'new',
+        mainInterests,
+        mainGoals,
+        formData.learning_style
+      );
+      
+      console.log('[Step 4] Generated', dynamicCards.length, 'dynamic cards');
+      console.log('[Step 4] Card titles:', dynamicCards.map(c => c.title).join(', '));
+      
+      // Generate AI dashboard content WITH dynamic cards
+      await aiApi.generateDashboard(userId, dynamicCards);
       
       // Content is ready, navigate to dashboard
       setGeneratingDashboard(false);

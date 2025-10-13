@@ -679,18 +679,30 @@ export const generateDashboardCards = (
     // STEP 1: EXCLUDE cards for topics user already knows (mainInterests from Step 3)
     const isAlreadyKnown = interestsArray.some(interest => {
       const interestLower = interest.toLowerCase();
-      return cardKeywords.includes(interestLower) || 
-             (interestLower.includes('meal') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
-             (interestLower.includes('nutrition') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
-             (interestLower.includes('diet') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
-             (interestLower.includes('complication') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent'))) ||
-             (interestLower.includes('prevent') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent'))) ||
-             (interestLower.includes('exercise') && (cardKeywords.includes('exercise') || cardKeywords.includes('workout'))) ||
-             (interestLower.includes('medication') && (cardKeywords.includes('medication') || cardKeywords.includes('drug'))) ||
-             (interestLower.includes('blood sugar') && (cardKeywords.includes('blood') || cardKeywords.includes('glucose'))) ||
-             (interestLower.includes('monitoring') && (cardKeywords.includes('monitoring') || cardKeywords.includes('track'))) ||
-             (interestLower.includes('injection') && (cardKeywords.includes('injection') || cardKeywords.includes('technique'))) ||
-             (interestLower.includes('inhaler') && (cardKeywords.includes('inhaler') || cardKeywords.includes('breathing')));
+      
+      // Enhanced matching: Check if interest keyword appears in card title/description
+      // Split interest into individual words to catch partial matches
+      const interestWords = interestLower.split(/[\s_-]+/); // Split by space, underscore, or hyphen
+      
+      return interestWords.some(word => {
+        if (word.length < 3) return false; // Skip very short words like "a", "of"
+        return cardKeywords.includes(word);
+      }) || 
+      // Specific synonyms and related terms
+      (interestLower.includes('meal') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
+      (interestLower.includes('nutrition') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
+      (interestLower.includes('diet') && (cardKeywords.includes('meal') || cardKeywords.includes('nutrition') || cardKeywords.includes('diet'))) ||
+      (interestLower.includes('complication') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent'))) ||
+      (interestLower.includes('prevent') && (cardKeywords.includes('complication') || cardKeywords.includes('prevent'))) ||
+      (interestLower.includes('exercise') && (cardKeywords.includes('exercise') || cardKeywords.includes('workout'))) ||
+      (interestLower.includes('medication') && (cardKeywords.includes('medication') || cardKeywords.includes('drug'))) ||
+      (interestLower.includes('blood sugar') && (cardKeywords.includes('blood') || cardKeywords.includes('glucose'))) ||
+      (interestLower.includes('monitoring') && (cardKeywords.includes('monitoring') || cardKeywords.includes('track'))) ||
+      (interestLower.includes('injection') && (cardKeywords.includes('injection') || cardKeywords.includes('technique'))) ||
+      (interestLower.includes('inhaler') && (cardKeywords.includes('inhaler') || cardKeywords.includes('breathing'))) ||
+      (interestLower.includes('preparation') && (cardKeywords.includes('preparation') || cardKeywords.includes('prepare') || cardKeywords.includes('pre-surgery'))) ||
+      (interestLower.includes('recovery') && (cardKeywords.includes('recovery') || cardKeywords.includes('healing') || cardKeywords.includes('post-surgery'))) ||
+      (interestLower.includes('pain') && (cardKeywords.includes('pain') || cardKeywords.includes('discomfort')));
     });
     
     if (isAlreadyKnown) {

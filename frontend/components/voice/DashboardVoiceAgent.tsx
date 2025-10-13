@@ -231,15 +231,6 @@ Be smart, flexible, and truly helpful!`;
           }, 100); // Wait for connection to be fully established (minimal delay)
           
           setIsInitialized(true);
-          
-          // Ensure the realtime session is fully ready for first message
-          setTimeout(() => {
-            if (realtimeSession.isConnected) {
-              console.log('[Dashboard Agent] ✅ Session fully ready for messages');
-              // Force reset any lingering state
-              realtimeSession.clearBuffers();
-            }
-          }, 500);
         } catch (error) {
           console.error('Failed to initialize voice session:', error);
           setMessages(prev => [...prev, {
@@ -481,7 +472,7 @@ Be smart, flexible, and truly helpful!`;
           ));
           activeAssistantIdRef.current = null;
         }
-      }, 25000); // 25 second timeout (increased from 15)
+      }, 15000); // 15 second timeout
       
       return () => clearTimeout(timeout);
     }
@@ -494,8 +485,6 @@ Be smart, flexible, and truly helpful!`;
     
     const currentText = realtimeSession.visibleResponse;
     const fullText = realtimeSession.lastResponse;
-    
-    // Debug logging removed - system is working
     
     // Clear timeout when we start receiving response
     if (fullText && fullText.length > 0 && responseTimeoutRef.current) {
@@ -521,8 +510,8 @@ Be smart, flexible, and truly helpful!`;
     else if (textRevealCompleteRef.current) {
       return;
     }
-    // Fallback - show any text we have
-    else if (currentText) {
+    // Fallback
+    else {
       setMessages(prev => prev.map(m => (m.role === 'assistant' && m.id === id ? { ...m, text: currentText } : m)));
     }
   }, [realtimeSession.visibleResponse, realtimeSession.lastResponse]);
@@ -616,20 +605,6 @@ Be smart, flexible, and truly helpful!`;
     const trimmed = textInput.trim();
     if (!trimmed || submittingRef.current || !isInitialized) return;
     
-    // Additional check: ensure realtime session is fully connected
-    if (!realtimeSession.isConnected) {
-      console.warn('[Dashboard Agent] Realtime session not connected, waiting...');
-      // Wait a bit for connection to establish
-      setTimeout(() => {
-        if (realtimeSession.isConnected) {
-          handleTextSubmit(); // Retry
-        } else {
-          console.error('[Dashboard Agent] Realtime session still not connected');
-        }
-      }, 1000);
-      return;
-    }
-    
     submittingRef.current = true;
     
     // Interrupt any active assistant response
@@ -701,7 +676,7 @@ Be smart, flexible, and truly helpful!`;
       }));
       activeAssistantIdRef.current = null;
       responseTimeoutRef.current = null;
-    }, 30000); // 30 second timeout (increased from 20)
+    }, 20000); // 20 second timeout
     
     // Send to AI with card context if a card is open
     let messageToSend = trimmed;
@@ -710,15 +685,9 @@ Be smart, flexible, and truly helpful!`;
       messageToSend = `[Context: User currently has "${selectedCard.title}" card open] ${trimmed}`;
       console.log('[Dashboard Agent] 🎯 Sending message with card context:', selectedCard.title);
     }
-    
-    // Add a small delay to ensure the session is fully ready, especially for first message
-    setTimeout(() => {
-      console.log('[Dashboard Agent] 📤 Sending text to realtime session:', messageToSend.substring(0, 50) + '...');
-      realtimeSession.sendText(messageToSend);
-    }, 100);
-    
+    realtimeSession.sendText(messageToSend);
     setTextInput('');
-    setTimeout(() => { submittingRef.current = false; }, 200);
+    setTimeout(() => { submittingRef.current = false; }, 100);
   }, [textInput, isInitialized, messages, realtimeSession, isSmallTalk, isMetaQuestion, isFollowUp, isRelatedToTopic, selectedCard]);
 
   // Handle quick chip click
@@ -837,35 +806,25 @@ Be smart, flexible, and truly helpful!`;
       {/* Floating Action Button */}
       {!isOpen && (
         <div className="fixed bottom-6 right-6 z-50">
-          <div className="group relative">
-            <button
-              onClick={() => setIsOpen(true)}
-              className={`w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center transition-all hover:scale-105 ${getFABRingColor()}`}
-              aria-label="Ask AI Assistant"
-            >
-              {/* Try to use user-provided head image, fallback to avatar loop */}
-              <div className="w-16 h-16 rounded-full overflow-hidden relative">
-                {hasCustomImage ? (
-                  <img 
-                    src="/assets/voice/agent-head.png" 
-                    alt="Voice Agent"
-                    className="w-full h-full object-cover"
-                    onError={() => setHasCustomImage(false)}
-                  />
-                ) : (
-                  <AvatarLoop isPlaying={realtimeSession.isPlaying} />
-                )}
-              </div>
-            </button>
-            
-            {/* Help Label */}
-            <div className="absolute right-24 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-              <div className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg">
-                Ask AI Assistant
-                <div className="absolute left-full top-1/2 transform -translate-y-1/2 w-0 h-0 border-l-4 border-l-gray-900 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
-              </div>
+          <button
+            onClick={() => setIsOpen(true)}
+            className={`w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center transition-all hover:scale-105 ${getFABRingColor()}`}
+            aria-label="Open Voice Assistant"
+          >
+            {/* Try to use user-provided head image, fallback to avatar loop */}
+            <div className="w-16 h-16 rounded-full overflow-hidden relative">
+              {hasCustomImage ? (
+                <img 
+                  src="/assets/voice/agent-head.png" 
+                  alt="Voice Agent"
+                  className="w-full h-full object-cover"
+                  onError={() => setHasCustomImage(false)}
+                />
+              ) : (
+                <AvatarLoop isPlaying={realtimeSession.isPlaying} />
+              )}
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -936,32 +895,32 @@ Be smart, flexible, and truly helpful!`;
               </div>
             )}
             {messages.map(msg => (
-                <div key={msg.id}>
-                  {msg.role === 'user' ? (
-                    <div className="flex justify-end">
-                      <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[85%] text-sm shadow-sm">
-                        {msg.text}
-                      </div>
+              <div key={msg.id}>
+                {msg.role === 'user' ? (
+                  <div className="flex justify-end">
+                    <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[85%] text-sm shadow-sm">
+                      {msg.text}
                     </div>
-                  ) : (
-                    <div className="flex justify-start">
-                      <div className={`rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[85%] text-sm shadow-sm ${
-                        (msg as any).status === 'error' 
-                          ? 'bg-red-50 text-red-700 border border-red-200'
-                          : (msg as any).status === 'stopped'
-                          ? 'bg-gray-100 text-gray-500 border border-gray-300'
-                          : 'bg-white text-gray-800 border border-gray-200'
-                      }`}>
-                        {msg.text ? (
-                          <BoldTextRenderer text={msg.text} />
-                        ) : (
-                          (msg as any).status === 'processing' ? 'Thinking...' : (msg as any).status === 'playing' ? '...' : 'NO TEXT FOUND'
-                        )}
-                        {(msg as any).status === 'stopped' && !msg.text && <span className="italic">Response stopped</span>}
-                      </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-start">
+                    <div className={`rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[85%] text-sm shadow-sm ${
+                      msg.status === 'error' 
+                        ? 'bg-red-50 text-red-700 border border-red-200'
+                        : msg.status === 'stopped'
+                        ? 'bg-gray-100 text-gray-500 border border-gray-300'
+                        : 'bg-white text-gray-800 border border-gray-200'
+                    }`}>
+                      {msg.text ? (
+                        <BoldTextRenderer text={msg.text} />
+                      ) : (
+                        msg.status === 'processing' ? 'Thinking...' : msg.status === 'playing' ? '...' : ''
+                      )}
+                      {msg.status === 'stopped' && !msg.text && <span className="italic">Response stopped</span>}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+              </div>
             ))}
             <div ref={messagesEndRef} />
           </div>

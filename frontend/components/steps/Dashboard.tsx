@@ -535,33 +535,41 @@ export const DashboardComponent: React.FC = () => {
           }
         }
 
-        // Smart caching: Check if content already exists before regenerating
-        if (generatedCards && generatedCards.length > 0) {
-          console.log('Dynamic cards present, checking if content already exists...');
-          
-          // First, try to load existing content from cache/database
-          try {
-            const existingContent = await aiApi.getDashboard(storedUserId);
-            if (existingContent && existingContent.dashboard && Object.keys(existingContent.dashboard).length > 0) {
-              console.log('✅ CACHE HIT: Content already exists, loading from cache');
-              console.log('Cached content keys:', Object.keys(existingContent.dashboard));
-              setDashboardContent(existingContent.dashboard);
-              setLoadingSession(false);
-              return; // Skip generation, use cached content
-            } else {
-              console.log('⚠️ CACHE MISS: No existing content found, generating new content');
-            }
-          } catch (cacheError) {
-            console.log('Cache check failed, will generate new content:', cacheError);
+        // Smart caching: Try to load existing content first
+        // Step 4 should have already generated the content when "Create Dashboard" was clicked
+        console.log('Session exists, loading dashboard content...');
+        console.log('Generated cards count:', generatedCards?.length || 0);
+        
+        // First, try to load existing content from cache/database
+        try {
+          const existingContent = await aiApi.getDashboard(storedUserId);
+          if (existingContent && existingContent.dashboard && Object.keys(existingContent.dashboard).length > 0) {
+            console.log('✅ CACHE HIT: Content already exists, loading from cache');
+            console.log('Cached content keys:', Object.keys(existingContent.dashboard));
+            setDashboardContent(existingContent.dashboard);
+            setLoadingSession(false);
+            return; // Skip generation, use cached content
+          } else {
+            console.log('⚠️ CACHE MISS: No existing content found');
+            console.log('⚠️ This should not happen - Step 4 should have generated content');
+            console.log('⚠️ Will attempt to generate now as fallback...');
           }
-          
-          // Generate content only if not cached
+        } catch (cacheError) {
+          console.log('Cache check failed, will generate new content:', cacheError);
+        }
+        
+        // Fallback: Generate content if not cached (should rarely happen)
+        if (session && generatedCards && generatedCards.length > 0) {
           setGeneratingContent(true);
           try {
             console.log('=== FRONTEND: Starting AI dashboard generation ===');
             console.log('User ID:', storedUserId);
-            console.log('Dynamic cards being sent:', generatedCards.length);
-            console.log('Dynamic cards details:', generatedCards.map(c => ({ id: c.id, contentKey: c.contentKey, title: c.title })));
+            console.log('Dynamic cards being sent:', generatedCards?.length || 0);
+            if (generatedCards && generatedCards.length > 0) {
+              console.log('Dynamic cards details:', generatedCards.map(c => ({ id: c.id, contentKey: c.contentKey, title: c.title })));
+            } else {
+              console.warn('⚠️ WARNING: No dynamic cards generated, backend will use legacy content');
+            }
             
             const response = await aiApi.generateDashboard(storedUserId, generatedCards);
             console.log('=== FRONTEND: AI generation response received ===');
@@ -594,19 +602,14 @@ export const DashboardComponent: React.FC = () => {
             setGeneratingContent(false);
           }
         } else {
-          try {
-            const dashboardData = await aiApi.getDashboard(storedUserId);
-            if (dashboardData.success && dashboardData.dashboard) {
-              setDashboardContent(dashboardData.dashboard);
-            }
-          } catch (dashboardErr) {
-            // Dashboard doesn't exist yet, will generate new one
-            console.log('No existing dashboard found, will generate new one');
-          }
+          console.log('⚠️ No session or no generated cards, cannot generate content');
+          setError('Unable to load dashboard. Please complete the assessment first.');
         }
       } catch (err) {
+        console.error('Error loading dashboard:', err);
         errorUtils.log('DashboardComponent loadDashboard', err);
-        router.push('/step-1');
+        // Don't redirect immediately - user might want to retry
+        setError('Failed to load dashboard. Please try refreshing the page.');
       } finally {
         setLoadingSession(false);
       }
@@ -1086,32 +1089,6 @@ export const DashboardComponent: React.FC = () => {
                   </svg>
                   Start Over
                 </Button>
-              </div>
-              
-              {/* Divider */}
-              <div className="relative mb-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white text-gray-500">or</span>
-                </div>
-              </div>
-              
-              {/* Voice Coach Button */}
-              <div className="text-center">
-                <Button
-                  onClick={() => router.push('/voice-coach')}
-                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white cursor-pointer transition-all transform hover:scale-105 px-8 py-3 rounded-lg inline-flex items-center gap-2.5 font-semibold text-base shadow-lg hover:shadow-xl"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
-                  Talk to Voice Coach
-                </Button>
-                <p className="text-sm text-gray-500 mt-3">
-                  Interact with your AI health assistant using voice
-                </p>
               </div>
             </div>
           )}
